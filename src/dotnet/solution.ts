@@ -1,5 +1,6 @@
 // The solution model behind the Solution view, run configurations and builds.
 import { create } from "zustand";
+import { useOutput } from "../lib/output";
 import { api, dirname, samePath, type ProjectInfo } from "../lib/api";
 
 interface SolutionState {
@@ -30,18 +31,35 @@ export async function loadSolution(root: string | null, preferred?: string | nul
     return;
   }
   useSolution.setState({ root, loading: true });
+  const log = (line: string) => useOutput.getState().append("Frost", line);
+  log(`Opening ${root}`);
   const ws = await api.findDotnetWorkspace(root);
+  log(`Found ${ws.solutions.length} solution(s) and ${ws.projects.length} project file(s).`);
+  ws.solutions.forEach((s) => log(`  solution: ${s}`));
+  ws.projects.forEach((p) => log(`  project:  ${p}`));
   const saved = preferred ?? localStorage.getItem(pref(root, "solution"));
   const solution = ws.solutions.find((s) => saved && samePath(s, saved)) ?? ws.solutions[0] ?? null;
   let paths = ws.projects;
   if (solution) {
     try {
-      paths = await api.readSolution(solution);
-    } catch {
-      /* fall back to every project in the folder */
+      const listed = await api.readSolution(solution);
+      log(`Solution ${solution} lists ${listed.length} project(s).`);
+      // A solution we can't read projects from shouldn't hide the projects in the folder.
+      if (listed.length) paths = listed;
+    } catch (e) {
+      log(`Couldn't read ${solution}: ${e}`);
     }
   }
-  const projects = (await Promise.all(paths.map((p) => api.readProject(p).catch(() => null)))).filter(Boolean) as ProjectInfo[];
+  const projects = (
+    await Promise.all(
+      paths.map((p) =>
+        api.readProject(p).catch((e) => {
+          log(`Couldn't read project ${p}: ${e}`);
+          return null;
+        }),
+      ),
+    )
+  ).filter(Boolean) as ProjectInfo[];
   projects.sort((a, b) => a.name.localeCompare(b.name));
   if (useSolution.getState().root !== root) return; // folder changed meanwhile
 
@@ -51,7 +69,10 @@ export async function loadSolution(root: string | null, preferred?: string | nul
   // Ask MSBuild for the real values in the background and refine.
   const evaluated = await evaluateProjects(projects);
   if (useSolution.getState().root !== root) return;
-  useSolution.setState({ projects: evaluated, startup: pickStartup(root, evaluated) });
+  const startup = pickStartup(root, evaluated);
+  evaluated.forEach((p) => log(`  ${p.name}: OutputType=${p.outputType ?? "?"} ${p.targetFrameworks.join(";")} ${p.isRunnable ? "runnable" : p.isTest ? "test" : "library"}`));
+  log(`Startup project: ${startup ?? "(none)"}`);
+  useSolution.setState({ projects: evaluated, startup });
 }
 
 function pickStartup(root: string, projects: ProjectInfo[]): string | null {

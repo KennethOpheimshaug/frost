@@ -594,9 +594,15 @@ function RunControls() {
       ) : (
         <button
           className="icon-button run"
-          title={!projects.length ? "No .NET projects found in this folder" : building ? "Wait for the build to finish" : current ? `Run ${current.name} (Ctrl+F5 / Shift+F10)` : "Choose a project to run"}
-          disabled={!projects.length || !!building}
-          onClick={run}
+          title={!projects.length ? "No .NET projects found in this folder" : building ? "A build is running (click to cancel)" : current ? `Run ${current.name} (Ctrl+F5 / Shift+F10)` : "Choose a project to run"}
+          onClick={() => {
+            if (building) return runCommand("build.cancel");
+            if (!projects.length) {
+              useStore.getState().toast("Frost found no .NET projects in this folder. See Output → Frost (workspace) for what it looked at.", "error");
+              return useStore.getState().showPanel("output");
+            }
+            run();
+          }}
         >
           <span className="codicon codicon-play" />
         </button>

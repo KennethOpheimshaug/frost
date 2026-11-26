@@ -138,6 +138,7 @@ function OutputPanel({ tabs }: { tabs: React.ReactNode }) {
         <select className="text-input panel-select" value={channel} onChange={(e) => setChannel(e.target.value as Channel)}>
           <option value="Build">Build</option>
           <option value="C#">C# Language Server</option>
+          <option value="Frost">Frost (workspace)</option>
         </select>
         <button className="icon-button" title="Clear Output" onClick={() => useOutput.getState().clear(channel)}>
           <span className="codicon codicon-clear-all" />

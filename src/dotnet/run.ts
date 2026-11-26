@@ -17,7 +17,7 @@ let listening = false;
 function ensureListening() {
   if (listening) return;
   listening = true;
-  api.onPtyExit((id) => {
+  void api.onPtyExit((id) => {
     if (id === TERMINAL_ID) useRun.setState({ project: null, mode: null });
   });
 }

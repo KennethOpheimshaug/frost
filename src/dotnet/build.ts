@@ -35,7 +35,7 @@ let pending: Map<string, Problem[]> = new Map();
 let seen = new Set<string>();
 let started = 0;
 let finish: ((ok: boolean) => void) | null = null;
-let listening = false;
+let listening: Promise<unknown> | null = null;
 
 function parse(line: string, cwd: string) {
   let m = WITH_POSITION.exec(line);
@@ -85,42 +85,45 @@ function parse(line: string, cwd: string) {
 const isAbsolute = (p: string) => /^([a-zA-Z]:[\\/]|\/)/.test(p);
 
 function ensureListening() {
-  if (listening) return;
-  listening = true;
-  api.onProcLine((id, _stream, line) => {
-    if (id !== ID) return;
-    useOutput.getState().append("Build", line);
-    const target = useBuild.getState().target;
-    parse(line, target ? dirname(target) : "");
-  });
-  api.onProcExit((id, code) => {
-    if (id !== ID) return;
-    const s = useBuild.getState();
-    const cancelled = s.result === "cancelled";
-    const ok = code === 0 && !cancelled;
-    // Replace the previous build's problems with this build's.
-    const problems = useProblems.getState();
-    problems.clear("build");
-    for (const [path, list] of pending) problems.set("build", path, list);
-    const seconds = Math.round((Date.now() - started) / 100) / 10;
-    useOutput.getState().append("Build", "", `${s.running} ${cancelled ? "cancelled" : ok ? "succeeded" : "failed"} in ${seconds}s — ${s.errors} error(s), ${s.warnings} warning(s)`);
-    useBuild.setState({ running: null, result: cancelled ? "cancelled" : ok ? "succeeded" : "failed", seconds });
-    const store = useStore.getState();
-    if (!ok && !cancelled) {
-      store.toast(`Build failed with ${s.errors} error(s).`, "error");
-      if (s.errors) store.showPanel("problems");
-    }
-    finish?.(ok);
-    finish = null;
-  });
+  if (listening) return listening;
+  listening = Promise.all([
+    api.onProcLine((id, _stream, line) => {
+      if (id !== ID) return;
+      useOutput.getState().append("Build", line);
+      const target = useBuild.getState().target;
+      parse(line, target ? dirname(target) : "");
+    }),
+    api.onProcExit((id, code) => {
+      if (id !== ID) return;
+      const s = useBuild.getState();
+      const cancelled = s.result === "cancelled";
+      const ok = code === 0 && !cancelled;
+      // Replace the previous build's problems with this build's.
+      const problems = useProblems.getState();
+      problems.clear("build");
+      for (const [path, list] of pending) problems.set("build", path, list);
+      const seconds = Math.round((Date.now() - started) / 100) / 10;
+      useOutput.getState().append("Build", "", `${s.running} ${cancelled ? "cancelled" : ok ? "succeeded" : "failed"} in ${seconds}s — ${s.errors} error(s), ${s.warnings} warning(s)`);
+      useBuild.setState({ running: null, result: cancelled ? "cancelled" : ok ? "succeeded" : "failed", seconds });
+      const store = useStore.getState();
+      if (!ok && !cancelled) {
+        store.toast(`Build failed with ${s.errors} error(s).`, "error");
+        if (s.errors) store.showPanel("problems");
+      }
+      finish?.(ok);
+      finish = null;
+    }),
+  ]);
+  return listening;
 }
 
 /** Builds `target` (a .sln/.slnx/.csproj or folder). Resolves true on success. */
-export function runBuild(kind: BuildKind, target: string, extraArgs: string[] = []): Promise<boolean> {
-  ensureListening();
+export async function runBuild(kind: BuildKind, target: string, extraArgs: string[] = []): Promise<boolean> {
+  // Listen before starting, or a fast build's exit could be missed and "building" would never end.
+  await ensureListening();
   if (useBuild.getState().running) {
-    useStore.getState().toast("A build is already running.");
-    return Promise.resolve(false);
+    useStore.getState().toast("A build is already running. Cancel it from the toolbar or with Ctrl+Pause.");
+    return false;
   }
   pending = new Map();
   seen = new Set();
