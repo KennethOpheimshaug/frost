@@ -1,4 +1,6 @@
+mod dotnet;
 mod fs;
+mod proc;
 mod pty;
 mod search;
 mod watch;
@@ -10,6 +12,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(watch::WatchState::default())
         .manage(pty::PtyState::default())
+        .manage(proc::ProcState::default())
         .invoke_handler(tauri::generate_handler![
             fs::list_dir,
             fs::read_text_file,
@@ -27,6 +30,14 @@ pub fn run() {
             pty::pty_write,
             pty::pty_resize,
             pty::pty_kill,
+            proc::lsp_start,
+            proc::lsp_send,
+            proc::proc_start,
+            proc::proc_kill,
+            dotnet::dotnet_info,
+            dotnet::find_dotnet_workspace,
+            dotnet::read_solution,
+            dotnet::read_project,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -5,6 +5,8 @@ export interface Command {
   label: string;
   /** Shown in the palette, e.g. "Ctrl+Shift+P". */
   keybinding?: string;
+  /** Extra keybindings (e.g. Rider's next to Visual Studio's). */
+  keys?: string[];
   run: () => void | Promise<void>;
 }
 
@@ -46,6 +48,6 @@ export function keyString(e: KeyboardEvent): string {
 
 /** Finds the command bound to a key string, if any. */
 export function commandForKey(key: string): Command | undefined {
-  for (const c of commands.values()) if (c.keybinding === key) return c;
+  for (const c of commands.values()) if (c.keybinding === key || c.keys?.includes(key)) return c;
   return undefined;
 }

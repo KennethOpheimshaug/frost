@@ -19,6 +19,8 @@ struct FsChange {
     dirs: Vec<String>,
     /// The changed paths themselves (used to reload open files).
     paths: Vec<String>,
+    created: Vec<String>,
+    removed: Vec<String>,
 }
 
 const IGNORED: [&str; 6] = [".git", "node_modules", "bin", "obj", "target", ".vs"];
@@ -41,12 +43,26 @@ pub fn watch_folder(app: AppHandle, state: State<WatchState>, path: String) -> R
     std::thread::spawn(move || {
         while let Ok(first) = rx.recv() {
             let mut paths = HashSet::new();
+            let mut created = HashSet::new();
+            let mut removed = HashSet::new();
             let mut collect = |res: notify::Result<notify::Event>| {
                 if let Ok(ev) = res {
                     for p in ev.paths {
-                        if !ignored(&p) {
-                            paths.insert(p);
+                        if ignored(&p) {
+                            continue;
                         }
+                        match ev.kind {
+                            notify::EventKind::Create(_) => {
+                                removed.remove(&p);
+                                created.insert(p.clone());
+                            }
+                            notify::EventKind::Remove(_) => {
+                                created.remove(&p);
+                                removed.insert(p.clone());
+                            }
+                            _ => {}
+                        }
+                        paths.insert(p);
                     }
                 }
             };
@@ -64,6 +80,8 @@ pub fn watch_folder(app: AppHandle, state: State<WatchState>, path: String) -> R
             let change = FsChange {
                 dirs: dirs.into_iter().collect(),
                 paths: paths.iter().map(|p| p.to_string_lossy().into_owned()).collect(),
+                created: created.iter().map(|p| p.to_string_lossy().into_owned()).collect(),
+                removed: removed.iter().map(|p| p.to_string_lossy().into_owned()).collect(),
             };
             if app.emit("fs-change", change).is_err() {
                 break;

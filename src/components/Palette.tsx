@@ -7,6 +7,8 @@ import { updateSetting } from "../lib/settings";
 import { fileIcon } from "../lib/icons";
 import { activeEditor } from "./EditorGroup";
 import { useStore, type PaletteMode } from "../store";
+import { searchSymbols, useCsharp } from "../lsp/roslyn";
+import { setStartup, useSolution } from "../dotnet/solution";
 
 interface Item {
   key: string;
@@ -20,7 +22,7 @@ interface Item {
   preview?: () => void;
 }
 
-const prefixFor: Record<PaletteMode, string> = { commands: ">", files: "", line: ":", themes: "" };
+const prefixFor: Record<PaletteMode, string> = { commands: ">", files: "", line: ":", themes: "", symbols: "#", projects: "" };
 
 export function Palette() {
   const palette = useStore((s) => s.palette)!;
@@ -31,6 +33,7 @@ export function Palette() {
   const [index, setIndex] = useState(0);
   const [files, setFiles] = useState<string[]>([]);
   const [themes, setThemes] = useState<ThemeInfo[]>([]);
+  const [symbols, setSymbols] = useState<Awaited<ReturnType<typeof searchSymbols>>>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const originalTheme = useRef(useStore.getState().settings["workbench.colorTheme"]);
@@ -48,18 +51,27 @@ export function Palette() {
     if (mode === "themes") listThemes().then(setThemes);
   }, [mode, root]);
 
-  // Typing ">" or ":" switches mode, like VS Code.
+  // Typing ">", ":" or "#" switches mode, like VS Code.
   const onChange = (v: string) => {
-    if (mode !== "themes") {
+    if (mode !== "themes" && mode !== "projects") {
       if (v.startsWith(">")) setMode("commands");
       else if (v.startsWith(":")) setMode("line");
+      else if (v.startsWith("#")) setMode("symbols");
       else setMode("files");
     }
     setText(v);
     setIndex(0);
   };
 
-  const query = mode === "commands" || mode === "line" ? text.slice(1).trim() : text.trim();
+  const query = mode === "commands" || mode === "line" || mode === "symbols" ? text.slice(1).trim() : text.trim();
+
+  // Workspace symbols come from the language server, debounced.
+  useEffect(() => {
+    if (mode !== "symbols") return;
+    if (!query) return setSymbols([]);
+    const t = setTimeout(() => searchSymbols(query).then(setSymbols).catch(() => setSymbols([])), 150);
+    return () => clearTimeout(t);
+  }, [mode, query]);
 
   const items: Item[] = useMemo(() => {
     if (mode === "commands") {
@@ -98,6 +110,33 @@ export function Palette() {
           },
         },
       ];
+    }
+
+    if (mode === "symbols") {
+      if (useCsharp.getState().status === "off" || useCsharp.getState().status === "missing")
+        return [{ key: "none", label: "Symbol search needs the C# language server (see the C# item in the status bar).", run: () => {} }];
+      if (!query) return [{ key: "hint", label: "Type the name of a class, method or property.", run: () => {} }];
+      return symbols.slice(0, 100).map((sym, i) => ({
+        key: `${sym.path}:${sym.line}:${i}`,
+        label: sym.name,
+        detail: `${sym.container ? sym.container + " · " : ""}${basename(sym.path)}`,
+        icon: { icon: "codicon-symbol-" + symbolIcon(sym.kind) },
+        run: () => useStore.getState().openFile(sym.path, { line: sym.line, column: sym.column }),
+      }));
+    }
+
+    if (mode === "projects") {
+      const { projects, startup } = useSolution.getState();
+      const runnable = projects.filter((p) => p.isRunnable);
+      if (!runnable.length) return [{ key: "none", label: "No runnable projects found.", run: () => {} }];
+      return fuzzyFilter(runnable, query, (p) => p.name).map(({ item: p, result }) => ({
+        key: p.path,
+        label: p.name,
+        positions: result.positions,
+        detail: p.path === startup ? "current startup project" : root ? relative(root, p.path) : p.path,
+        icon: { icon: "codicon-rocket", color: "#3794ff" },
+        run: () => setStartup(p.path),
+      }));
     }
 
     if (mode === "themes") {
@@ -143,7 +182,7 @@ export function Palette() {
         run: () => useStore.getState().openFile(item, line ? { line: +line, column: col ? +col : 1 } : undefined),
       };
     });
-  }, [mode, query, files, themes, root]);
+  }, [mode, query, files, themes, root, symbols]);
 
   // Live preview while moving through themes.
   useEffect(() => {
@@ -173,7 +212,13 @@ export function Palette() {
           className="palette-input"
           value={text}
           placeholder={
-            mode === "themes" ? "Select Color Theme (Up/Down keys to preview)" : mode === "files" ? "Search files by name (append :line to go to a line, > for commands)" : ""
+            mode === "themes"
+              ? "Select Color Theme (Up/Down keys to preview)"
+              : mode === "projects"
+                ? "Select startup project"
+                : mode === "files"
+                  ? "Search files by name (:line to go to a line, > for commands, # for symbols)"
+                  : ""
           }
           spellCheck={false}
           onChange={(e) => onChange(e.target.value)}
@@ -209,6 +254,9 @@ export function Palette() {
     </div>
   );
 }
+
+const symbolNames = ["file", "module", "namespace", "package", "class", "method", "property", "field", "constructor", "enum", "interface", "function", "variable", "constant", "string", "number", "boolean", "array", "object", "key", "null", "enum-member", "struct", "event", "operator", "type-parameter"];
+const symbolIcon = (kind: number) => symbolNames[kind] ?? "misc";
 
 /** Your themes first, then dark, then light. */
 const rank = (t: ThemeInfo) => (t.source === "user" ? 0 : t.type === "dark" ? 1 : 2);

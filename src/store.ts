@@ -10,8 +10,9 @@ export interface EditorGroup {
   active: string | null;
 }
 
-export type SidebarView = "explorer" | "search";
-export type PaletteMode = "commands" | "files" | "line" | "themes";
+export type SidebarView = "explorer" | "solution" | "search";
+export type PanelTab = "terminal" | "problems" | "output";
+export type PaletteMode = "commands" | "files" | "line" | "themes" | "symbols" | "projects";
 
 export interface Toast {
   id: number;
@@ -35,6 +36,7 @@ interface State {
   activeGroup: number;
   sidebar: SidebarView | null;
   panelOpen: boolean;
+  panelTab: PanelTab;
   palette: { mode: PaletteMode; nonce: number } | null;
   cursor: { line: number; column: number } | null;
   reveal: Reveal | null;
@@ -55,6 +57,7 @@ interface State {
   closePaths(prefix: string): void;
   toggleSidebar(view?: SidebarView): void;
   togglePanel(open?: boolean): void;
+  showPanel(tab: PanelTab): void;
   openPalette(mode: PaletteMode): void;
   closePalette(): void;
   setCursor(c: { line: number; column: number } | null): void;
@@ -81,6 +84,7 @@ export const useStore = create<State>((set, get) => ({
   activeGroup: 0,
   sidebar: "explorer",
   panelOpen: false,
+  panelTab: "terminal",
   palette: null,
   cursor: null,
   reveal: null,
@@ -167,6 +171,7 @@ export const useStore = create<State>((set, get) => ({
       return { sidebar: s.sidebar === view ? null : view };
     }),
   togglePanel: (open) => set((s) => ({ panelOpen: open ?? !s.panelOpen })),
+  showPanel: (panelTab) => set({ panelOpen: true, panelTab }),
   openPalette: (mode) => set({ palette: { mode, nonce: ++nonce } }),
   closePalette: () => set({ palette: null }),
   setCursor: (cursor) => set({ cursor }),

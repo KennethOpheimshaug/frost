@@ -29,7 +29,16 @@ api.onPtyExit((id) => {
   }
 });
 
-export function TerminalPanel() {
+interface NewTerminal {
+  id?: string;
+  cwd?: string;
+  command?: string;
+  args?: string[];
+  title?: string;
+  env?: Record<string, string>;
+}
+
+export function TerminalPanel({ tabs, visible }: { tabs: React.ReactNode; visible: boolean }) {
   const [ids, setIds] = useState<string[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const panelOpen = useStore((s) => s.panelOpen);
@@ -38,8 +47,10 @@ export function TerminalPanel() {
   const root = useStore((s) => s.root);
   const hostRef = useRef<HTMLDivElement>(null);
 
-  const create = async (cwd?: string) => {
-    const id = `t${++counter}`;
+  const create = async (opts: NewTerminal = {}) => {
+    const { cwd } = opts;
+    const id = opts.id ?? `t${++counter}`;
+    if (sessions.has(id)) close(id, true);
     const s = useStore.getState();
     const term = new Terminal({
       fontFamily: s.settings["terminal.integrated.fontFamily"],
@@ -63,16 +74,17 @@ export function TerminalPanel() {
       if (e.ctrlKey && e.key === "v") return false;
       return true;
     });
-    const session: Session = { id, title: basename(s.settings["terminal.integrated.shell"] ?? (navigator.userAgent.includes("Windows") ? "powershell" : "shell")), term, fit, exited: false };
+    const shellName = basename(s.settings["terminal.integrated.shell"] ?? (navigator.userAgent.includes("Windows") ? "powershell" : "shell"));
+    const session: Session = { id, title: opts.title ?? shellName, term, fit, exited: false };
     sessions.set(id, session);
     term.onData((data) => {
       if (session.exited) return close(id);
       api.ptyWrite(id, data).catch(() => {});
     });
     term.onResize(({ cols, rows }) => api.ptyResize(id, cols, rows).catch(() => {}));
-    setIds((list) => [...list, id]);
+    setIds((list) => [...list.filter((x) => x !== id), id]);
     setActive(id);
-    useStore.getState().togglePanel(true);
+    useStore.getState().showPanel("terminal");
     // Wait for the element to mount, then size and start the shell.
     requestAnimationFrame(async () => {
       const el = document.getElementById(`term-${id}`);
@@ -85,7 +97,9 @@ export function TerminalPanel() {
           cwd: cwd ?? useStore.getState().root ?? undefined,
           cols: term.cols,
           rows: term.rows,
-          command: s.settings["terminal.integrated.shell"] ?? undefined,
+          command: opts.command ?? s.settings["terminal.integrated.shell"] ?? undefined,
+          args: opts.args,
+          env: opts.env,
         });
       } catch (e) {
         term.write(`\x1b[31mFailed to start shell: ${e}\x1b[0m`);
@@ -94,32 +108,44 @@ export function TerminalPanel() {
     });
   };
 
-  const close = (id: string) => {
+  const close = (id: string, replacing = false) => {
     api.ptyKill(id).catch(() => {});
     sessions.get(id)?.term.dispose();
     sessions.delete(id);
+    if (replacing) return;
     setIds((list) => {
       const next = list.filter((x) => x !== id);
       setActive((a) => (a === id ? next[next.length - 1] ?? null : a));
-      if (next.length === 0) useStore.getState().togglePanel(false);
+      if (next.length === 0 && useStore.getState().panelTab === "terminal") useStore.getState().togglePanel(false);
       return next;
     });
   };
 
-  // Open a first terminal when the panel opens empty.
+  // Open a first terminal when the terminal tab is shown empty.
   useEffect(() => {
-    if (panelOpen && ids.length === 0) create();
-    if (panelOpen && active) requestAnimationFrame(() => sessions.get(active)?.term.focus());
+    if (!panelOpen || !visible) return;
+    if (ids.length === 0) create();
+    else if (active)
+      requestAnimationFrame(() => {
+        sessions.get(active)?.fit.fit();
+        sessions.get(active)?.term.focus();
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panelOpen]);
+  }, [panelOpen, visible]);
 
   useEffect(() => {
-    const onNew = (e: Event) => create((e as CustomEvent<{ cwd?: string }>).detail?.cwd);
+    const onNew = (e: Event) => create((e as CustomEvent<NewTerminal>).detail ?? {});
+    const onKill = (e: Event) => {
+      const id = (e as CustomEvent<{ id: string }>).detail.id;
+      if (sessions.has(id)) close(id);
+    };
     const onFocus = () => active && sessions.get(active)?.term.focus();
     window.addEventListener("ide:new-terminal", onNew);
+    window.addEventListener("ide:kill-terminal", onKill);
     window.addEventListener("ide:focus-terminal", onFocus);
     return () => {
       window.removeEventListener("ide:new-terminal", onNew);
+      window.removeEventListener("ide:kill-terminal", onKill);
       window.removeEventListener("ide:focus-terminal", onFocus);
     };
   });
@@ -149,16 +175,14 @@ export function TerminalPanel() {
   useEffect(() => void root, [root]);
 
   return (
-    <div className="panel">
+    <div className="panel" style={{ display: visible ? "flex" : "none" }}>
       <div className="panel-header">
-        <span className="panel-title">Terminal</span>
+        {tabs}
         <div className="terminal-tabs">
           {ids.map((id, i) => (
             <div key={id} className={`terminal-tab ${id === active ? "active" : ""}`} onClick={() => setActive(id)}>
               <span className="codicon codicon-terminal" />
-              <span>
-                {i + 1}: {sessions.get(id)?.title}
-              </span>
+              <span>{sessions.get(id)?.title ?? `${i + 1}`}</span>
               <button
                 className="icon-button"
                 title="Kill Terminal"
@@ -173,7 +197,7 @@ export function TerminalPanel() {
           ))}
         </div>
         <div className="panel-actions">
-          <button className="icon-button" title="New Terminal (Ctrl+Shift+`)" onClick={() => create()}>
+          <button className="icon-button" title="New Terminal (Ctrl+Shift+`)" onClick={() => create({})}>
             <span className="codicon codicon-add" />
           </button>
           <button className="icon-button" title="Hide Panel (Ctrl+`)" onClick={() => useStore.getState().togglePanel(false)}>

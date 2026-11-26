@@ -2,7 +2,7 @@
 
 A fast, personal IDE for C#, mixing the feel of VS Code, Rider and PyCharm. Built with **Tauri 2** (a Rust backend and the system WebView) and **React + TypeScript**. The editor is **Monaco**. Syntax colors come from real **TextMate grammars and VS Code themes** (through Shiki).
 
-Status: **phase 1 (editor MVP)**. C# language support, building and debugging come in phase 2. Claude Code integration comes in phase 3.
+Status: **phase 2 in progress**. C# language support, the Solution view, building and running work. The debugger is next. Claude Code integration comes in phase 3.
 
 ## What works now
 
@@ -14,6 +14,23 @@ Status: **phase 1 (editor MVP)**. C# language support, building and debugging co
 - **Themes:** 65 built-in VS Code themes, with live preview in `Ctrl+Shift+T`. **Import any VS Code theme JSON** from the command palette, or drop theme `.json` files into the themes folder. The whole UI follows the theme, not only the editor.
 - **Settings** (`Ctrl+,`) in `settings.json`, using VS Code's key names, including `workbench.colorCustomizations` and `editor.tokenColorCustomizations`.
 - Auto save (`files.autoSave`), compact/comfortable layout, resizable side bar and panel, and a prompt before closing with unsaved changes.
+
+### C# (phase 2)
+
+- **C# language support** through Microsoft's Roslyn language server: completion, hover, go to definition / implementation, find references, rename across files, quick fixes and refactorings (`Ctrl+.`), formatting, signature help, inlay hints, outline (`Ctrl+Shift+O`), live errors, and **Go to Symbol in Workspace** (`Ctrl+T`, or `#` in the palette).
+- **Solution view** (Rider-style, `Ctrl+Alt+L`): solution → projects (startup project marked) → dependencies (frameworks, NuGet packages, project references) → files. Right-click a project to build, run, run with hot reload or set it as the startup project. Supports `.sln` and `.slnx`. It picks between several solutions and falls back to loose `.csproj` files.
+- **Build** (`Ctrl+Shift+B`), rebuild, clean, restore, cancel. Errors and warnings land in the **Problems** panel (`Ctrl+Shift+M`), merged with live errors from Roslyn. The full log is in **Output** (`Ctrl+Shift+U`). Packages are restored automatically when Roslyn asks for it.
+- **Run** the startup project (`Ctrl+F5` or `Shift+F10`): it builds first, shows errors in Problems, then runs in a terminal tab. **Run with Hot Reload** (`dotnet watch`, `Ctrl+Alt+F5`). **Stop** (`Shift+F5` or `Ctrl+F2`). Pick the startup project from the toolbar.
+
+#### One-time setup for C#
+
+Install the [.NET SDK](https://dot.net) (8 or newer, 10 recommended), then the language server:
+
+```powershell
+dotnet tool install --global roslyn-language-server --prerelease
+```
+
+Restart Frost afterwards. The status bar shows `✓ C#` when it's ready. If the server is installed somewhere else, set `"dotnet.languageServer.command"` in settings.
 
 ## Run it on Windows
 
@@ -53,6 +70,14 @@ Status: **phase 1 (editor MVP)**. C# language support, building and debugging co
 | Editor font size | `Ctrl+=` / `Ctrl+-` |
 | Word wrap | `Alt+Z` |
 | Open folder | `Ctrl+O` |
+| Go to symbol in workspace | `Ctrl+T` |
+| Solution view | `Ctrl+Alt+L` |
+| Build solution / cancel | `Ctrl+Shift+B` / `Ctrl+Pause` |
+| Run / run with hot reload / stop | `Ctrl+F5` (`Shift+F10`) / `Ctrl+Alt+F5` / `Shift+F5` (`Ctrl+F2`) |
+| Problems / Output | `Ctrl+Shift+M` / `Ctrl+Shift+U` |
+| Quick fix | `Ctrl+.` |
+| Rename symbol | `F2` |
+| Go to definition / references | `F12` / `Shift+F12` |
 
 ## Project layout
 
@@ -60,7 +85,10 @@ Status: **phase 1 (editor MVP)**. C# language support, building and debugging co
 src/                     React frontend
   App.tsx                layout, commands, keybindings, title/activity/status bars
   store.ts               workbench state (zustand)
-  components/            Explorer, EditorGroup, TerminalPanel, SearchView, Palette, ContextMenu
+  components/            Explorer, SolutionView, EditorGroup, BottomPanel (Problems/Output/Terminal),
+                         TerminalPanel, SearchView, Palette, ContextMenu
+  lsp/                   LSP client, Monaco bridge (all editor features), Roslyn launcher
+  dotnet/                solution model, build (dotnet build -> Problems), run/watch/stop
   lib/
     api.ts               typed calls to the Rust commands
     highlighting.ts      Monaco + Shiki: TextMate grammars, VS Code themes, customizations
@@ -73,6 +101,8 @@ src-tauri/src/           Rust backend
   watch.rs               file watcher (batched events)
   search.rs              quick-open file list and text search (ripgrep's `ignore` crate)
   pty.rs                 terminals (portable-pty)
+  proc.rs                language servers (LSP over stdio) and tools with streamed output
+  dotnet.rs              .NET SDK detection, .sln/.slnx/.csproj reading
 ```
 
 ## Where settings and themes live
@@ -80,6 +110,8 @@ src-tauri/src/           Rust backend
 - Windows: `%APPDATA%\com.kennethopheimshaug.frost\settings.json` and `...\themes\`
 - Run **Preferences: Show Themes Folder Path** in the command palette to see the exact path.
 
-## Next: phase 2
+## Next in phase 2
 
-C# with Roslyn LSP, a .NET build host (MSBuild binary logs, live progress, Problems panel), `dotnet watch` hot reload, and a DAP debugger. See the plan doc for details.
+- Debugger (DAP, netcoredbg first): breakpoints, inline values, watch, call stack, attach.
+- .NET build host: MSBuild binary logs, live per-project progress, an exact project model.
+- Test explorer and decompiled "go to definition" into libraries.

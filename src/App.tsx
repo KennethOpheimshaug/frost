@@ -6,13 +6,20 @@ import { applyTheme, importThemeFile } from "./lib/highlighting";
 import { themeToCssVars } from "./lib/uiColors";
 import { getSettingsPath, loadSettings, updateSetting, type Settings } from "./lib/settings";
 import { dirtyPaths, isDirty, onDirtyChange, reloadFromDisk, saveModel } from "./lib/models";
-import { commandForKey, keyString, registerCommands } from "./lib/commands";
+import { commandForKey, keyString, registerCommands, runCommand } from "./lib/commands";
 import { languageForPath, languageName } from "./lib/languages";
 import { useStore, activeFile } from "./store";
 import { Explorer } from "./components/Explorer";
 import { SearchView } from "./components/SearchView";
 import { EditorGroup, activeEditor, closeTabSafely } from "./components/EditorGroup";
-import { TerminalPanel } from "./components/TerminalPanel";
+import { BottomPanel } from "./components/BottomPanel";
+import { SolutionView } from "./components/SolutionView";
+import { ContextMenu, type MenuItem } from "./components/ContextMenu";
+import { allProblems, useProblems } from "./lib/problems";
+import { buildTarget, loadSolution, setStartup, useSolution } from "./dotnet/solution";
+import { cancelBuild, runBuild, useBuild } from "./dotnet/build";
+import { runProject, stopRun, useRun } from "./dotnet/run";
+import { notifyFileChanges, notifySaved, startCsharp, stopCsharp, useCsharp } from "./lsp/roslyn";
 import { Palette } from "./components/Palette";
 import "./App.css";
 
@@ -88,9 +95,31 @@ export default function App() {
 
   useEffect(() => localStorage.setItem(layoutKey, JSON.stringify(layout)), [layout]);
 
+  // .NET: read the solution and start the C# language server for the open folder.
+  const csharpOn = s.settings["dotnet.languageServer.enabled"];
+  const csharpCmd = s.settings["dotnet.languageServer.command"];
+  useEffect(() => {
+    loadSolution(s.root);
+    if (!s.root || !csharpOn) {
+      stopCsharp();
+      return;
+    }
+    startCsharp(s.root, {
+      command: csharpCmd,
+      solution: useSolution.getState().solution,
+      onRestoreNeeded: (projects) => {
+        if (!useBuild.getState().running) runBuild("restore", projects[0] ?? buildTarget() ?? s.root!);
+      },
+    });
+  }, [s.root, csharpOn, csharpCmd]);
+
   // Reload open files changed on disk (git checkout, other editors, Claude Code...).
   useEffect(() => {
-    const un = api.onFsChange((c) => reloadFromDisk(c.paths));
+    const un = api.onFsChange((c) => {
+      reloadFromDisk(c.paths);
+      const changed = c.paths.filter((p) => !c.created.includes(p) && !c.removed.includes(p));
+      notifyFileChanges(c.created, changed, c.removed);
+    });
     return () => void un.then((f) => f());
   }, []);
 
@@ -139,6 +168,7 @@ export default function App() {
       if (!path) return;
       try {
         await saveModel(path);
+        notifySaved(path);
         if (path === (await getSettingsPath())) {
           st().setSettings(await loadSettings());
           st().toast("Settings applied");
@@ -149,6 +179,19 @@ export default function App() {
     };
     const setSetting = async (key: keyof Settings, value: unknown) => {
       st().setSettings(await updateSetting(st().settings, key, value as never));
+    };
+    const buildAll = (kind: "build" | "rebuild" | "clean" | "restore") => {
+      const target = buildTarget();
+      if (!target) return st().toast("Open a folder with a .NET solution or project first.", "error");
+      return runBuild(kind, target);
+    };
+    const runStartup = async () => {
+      const startup = useSolution.getState().startup;
+      if (!startup) return runProject("run");
+      if (useRun.getState().project) stopRun();
+      if (!st().settings["dotnet.buildBeforeRun"]) return runProject("run", startup);
+      await Promise.all(dirtyPaths().map(saveModel));
+      if (await runBuild("build", startup)) runProject("run", startup, { noBuild: true });
     };
     const cycleTab = (dir: 1 | -1) => {
       const { groups, activeGroup } = st();
@@ -214,9 +257,10 @@ export default function App() {
         label: "View: Toggle Terminal",
         keybinding: "Ctrl+`",
         run: () => {
-          const open = !st().panelOpen;
-          st().togglePanel(open);
-          if (!open) activeEditor()?.focus();
+          if (st().panelOpen && st().panelTab === "terminal") {
+            st().togglePanel(false);
+            activeEditor()?.focus();
+          } else st().showPanel("terminal");
         },
       },
       { id: "terminal.new", label: "Terminal: Create New Terminal", keybinding: "Ctrl+Shift+`", run: () => window.dispatchEvent(new CustomEvent("ide:new-terminal", { detail: {} })) },
@@ -250,6 +294,27 @@ export default function App() {
         id: "view.density",
         label: "View: Toggle Compact / Comfortable Layout",
         run: () => setSetting("workbench.density", (st().settings["workbench.density"] === "compact" ? "comfortable" : "compact") as never),
+      },
+      { id: "palette.symbols", label: "Go to Symbol in Workspace…", keybinding: "Ctrl+T", run: () => st().openPalette("symbols") },
+      { id: "build.build", label: "Build: Build Solution", keybinding: "Ctrl+Shift+B", run: () => buildAll("build") },
+      { id: "build.rebuild", label: "Build: Rebuild Solution", run: () => buildAll("rebuild") },
+      { id: "build.clean", label: "Build: Clean Solution", run: () => buildAll("clean") },
+      { id: "build.restore", label: "Build: Restore NuGet Packages", run: () => buildAll("restore") },
+      { id: "build.cancel", label: "Build: Cancel Build", keybinding: "Ctrl+Pause", run: () => cancelBuild() },
+      { id: "run.run", label: "Run: Run Startup Project", keybinding: "Ctrl+F5", keys: ["Shift+F10"], run: () => runStartup() },
+      { id: "run.watch", label: "Run: Run with Hot Reload (dotnet watch)", keybinding: "Ctrl+Alt+F5", run: () => runProject("watch") },
+      { id: "run.stop", label: "Run: Stop", keybinding: "Shift+F5", keys: ["Ctrl+F2"], run: () => stopRun() },
+      { id: "run.selectStartup", label: "Run: Select Startup Project…", run: () => st().openPalette("projects") },
+      { id: "view.solution", label: "View: Show Solution", keybinding: "Ctrl+Alt+L", run: () => useStore.setState({ sidebar: "solution" }) },
+      { id: "view.problems", label: "View: Show Problems", keybinding: "Ctrl+Shift+M", run: () => st().showPanel("problems") },
+      { id: "view.output", label: "View: Show Output", keybinding: "Ctrl+Shift+U", run: () => st().showPanel("output") },
+      {
+        id: "csharp.restart",
+        label: "C#: Restart Language Server",
+        run: () => {
+          const root = st().root;
+          if (root) startCsharp(root, { command: st().settings["dotnet.languageServer.command"], solution: useSolution.getState().solution });
+        },
       },
       { id: "dev.reload", label: "Developer: Reload Window", run: () => location.reload() },
       { id: "dev.devtools", label: "Developer: Toggle Developer Tools (F12 in dev builds)", run: () => st().toast("Right-click → Inspect, or press F12, in a dev build (npm run tauri dev).") },
@@ -308,7 +373,7 @@ export default function App() {
         {s.sidebar && (
           <>
             <aside className="sidebar" style={{ width: layout.sidebar }}>
-              {s.sidebar === "explorer" ? <Explorer onOpenFolder={() => openFolder()} /> : <SearchView />}
+              {s.sidebar === "explorer" ? <Explorer onOpenFolder={() => openFolder()} /> : s.sidebar === "solution" ? <SolutionView /> : <SearchView />}
             </aside>
             <div className="sash vertical" onPointerDown={drag("sidebar")} />
           </>
@@ -321,7 +386,7 @@ export default function App() {
           </div>
           <div className="sash horizontal" style={{ display: s.panelOpen ? "block" : "none" }} onPointerDown={drag("panel")} />
           <div className="panel-container" style={{ height: layout.panel, display: s.panelOpen ? "flex" : "none" }}>
-            <TerminalPanel />
+            <BottomPanel />
           </div>
         </div>
       </div>
@@ -358,17 +423,7 @@ function TitleBar({ onOpenFolder }: { onOpenFolder: () => void }) {
         <kbd>Ctrl+P</kbd>
       </button>
       <div className="titlebar-right">
-        <div className="run-config" title="Run configurations arrive in phase 2">
-          <span className="codicon codicon-symbol-event" />
-          <span>Current File</span>
-          <span className="codicon codicon-chevron-down" />
-        </div>
-        <button className="icon-button run" disabled title="Run (phase 2)">
-          <span className="codicon codicon-play" />
-        </button>
-        <button className="icon-button debug" disabled title="Debug (phase 2)">
-          <span className="codicon codicon-debug-alt" />
-        </button>
+        <RunControls />
         <span className="titlebar-sep" />
         <button className="icon-button" disabled title="Claude Code (phase 3)">
           <span className="codicon codicon-sparkle" />
@@ -390,7 +445,7 @@ function TitleBar({ onOpenFolder }: { onOpenFolder: () => void }) {
 function ActivityBar() {
   const sidebar = useStore((s) => s.sidebar);
   const panelOpen = useStore((s) => s.panelOpen);
-  const item = (view: "explorer" | "search", icon: string, title: string) => (
+  const item = (view: "explorer" | "solution" | "search", icon: string, title: string) => (
     <button className={`activity-item ${sidebar === view ? "active" : ""}`} title={title} onClick={() => useStore.getState().toggleSidebar(view)}>
       <span className={`codicon ${icon}`} />
     </button>
@@ -398,6 +453,7 @@ function ActivityBar() {
   return (
     <nav className="activitybar">
       {item("explorer", "codicon-files", "Explorer (Ctrl+Shift+E)")}
+      {item("solution", "codicon-symbol-namespace", "Solution (Ctrl+Alt+L)")}
       {item("search", "codicon-search", "Search (Ctrl+Shift+F)")}
       <button className={`activity-item ${panelOpen ? "active-soft" : ""}`} title="Terminal (Ctrl+`)" onClick={() => useStore.getState().togglePanel()}>
         <span className="codicon codicon-terminal" />
@@ -427,6 +483,8 @@ function StatusBar({ file }: { file: string | null }) {
         <span className="status-item">
           <span className="codicon codicon-remote" /> {root ? basename(root) : "No folder"}
         </span>
+        <ProblemCounts />
+        <BuildStatus />
         {file && isDirty(file) && <span className="status-item">● Unsaved</span>}
       </div>
       <div className="status-right">
@@ -439,10 +497,111 @@ function StatusBar({ file }: { file: string | null }) {
         {file && <span className="status-item">UTF-8</span>}
         {file && model && <span className="status-item">{eol}</span>}
         {file && <span className="status-item">{languageName(languageForPath(file))}</span>}
+        <CsharpStatus />
         <span className="status-item clickable" onClick={() => useStore.getState().openPalette("themes")}>
           <span className="codicon codicon-symbol-color" /> {theme?.label}
         </span>
       </div>
     </footer>
+  );
+}
+
+function RunControls() {
+  const { projects, startup } = useSolution();
+  const running = useRun();
+  const building = useBuild((b) => b.running);
+  const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  const runnable = projects.filter((p) => p.isRunnable);
+  const current = projects.find((p) => p.path === startup);
+  const run = () => runCommand("run.run");
+
+  const openMenu = (e: React.MouseEvent) => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setMenu({
+      x: r.left,
+      y: r.bottom + 4,
+      items: runnable.length
+        ? [
+            ...runnable.map((p) => ({ label: `${p.path === startup ? "✓ " : "   "}${p.name}`, action: () => setStartup(p.path) })),
+            { separator: true as const },
+            { label: "Run with Hot Reload (dotnet watch)", action: () => runProject("watch") },
+            { label: "Build Solution", hint: "Ctrl+Shift+B", action: () => runCommand("build.build") },
+          ]
+        : [{ label: "No runnable projects (needs OutputType Exe or a Web SDK)", action: () => {}, disabled: true }],
+    });
+  };
+
+  return (
+    <>
+      <button className="run-config" onClick={openMenu} title="Select startup project">
+        <span className={`codicon ${current ? "codicon-rocket" : "codicon-symbol-event"}`} />
+        <span>{current?.name ?? (projects.length ? "No runnable project" : "No project")}</span>
+        <span className="codicon codicon-chevron-down" />
+      </button>
+      <button className="icon-button" title={building ? "Cancel Build (Ctrl+Pause)" : "Build Solution (Ctrl+Shift+B)"} disabled={!projects.length} onClick={() => runCommand(building ? "build.cancel" : "build.build")}>
+        <span className={`codicon ${building ? "codicon-loading codicon-modifier-spin" : "codicon-tools"}`} />
+      </button>
+      {running.project ? (
+        <button className="icon-button stop" title="Stop (Shift+F5)" onClick={() => stopRun()}>
+          <span className="codicon codicon-debug-stop" />
+        </button>
+      ) : (
+        <button className="icon-button run" title="Run (Ctrl+F5 / Shift+F10)" disabled={!current || !!building} onClick={run}>
+          <span className="codicon codicon-play" />
+        </button>
+      )}
+      <button className="icon-button debug" disabled title="Debug (coming next in phase 2)">
+        <span className="codicon codicon-debug-alt" />
+      </button>
+      {menu && <ContextMenu {...menu} onClose={() => setMenu(null)} />}
+    </>
+  );
+}
+
+function ProblemCounts() {
+  useProblems((p) => p.byFile);
+  const all = allProblems();
+  const errors = all.filter((p) => p.severity === "error").length;
+  const warnings = all.filter((p) => p.severity === "warning").length;
+  return (
+    <span className="status-item clickable" title="Problems (Ctrl+Shift+M)" onClick={() => useStore.getState().showPanel("problems")}>
+      <span className="codicon codicon-error" /> {errors} <span className="codicon codicon-warning" /> {warnings}
+    </span>
+  );
+}
+
+function BuildStatus() {
+  const b = useBuild();
+  if (b.running)
+    return (
+      <span className="status-item clickable" onClick={() => useStore.getState().showPanel("output")}>
+        <span className="codicon codicon-loading codicon-modifier-spin" /> {b.running === "restore" ? "Restoring…" : "Building…"}
+      </span>
+    );
+  if (!b.result) return null;
+  return (
+    <span className="status-item clickable" onClick={() => useStore.getState().showPanel("output")} title="Show build output">
+      <span className={`codicon ${b.result === "succeeded" ? "codicon-check" : b.result === "cancelled" ? "codicon-circle-slash" : "codicon-error"}`} />
+      Build {b.result} ({b.seconds}s)
+    </span>
+  );
+}
+
+function CsharpStatus() {
+  const { status, detail, sdk } = useCsharp();
+  if (status === "off") return null;
+  const icon =
+    status === "ready" ? "codicon-check" : status === "missing" || status === "error" ? "codicon-warning" : "codicon-loading codicon-modifier-spin";
+  return (
+    <span
+      className="status-item clickable"
+      title={`${detail}${sdk ? `\n.NET SDK ${sdk}` : ""}`}
+      onClick={() => {
+        if (status === "missing") useStore.getState().toast(detail, "error");
+        else useStore.getState().showPanel("output");
+      }}
+    >
+      <span className={`codicon ${icon}`} /> C#{status === "loading" || status === "starting" ? ": loading" : status === "missing" ? ": not installed" : status === "error" ? ": stopped" : ""}
+    </span>
   );
 }

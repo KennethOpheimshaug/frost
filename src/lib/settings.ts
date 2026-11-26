@@ -26,6 +26,12 @@ export interface Settings {
   "terminal.integrated.fontSize": number;
   "terminal.integrated.fontFamily": string;
   "terminal.integrated.shell": string | null;
+  /** Command or full path of the Roslyn language server. */
+  "dotnet.languageServer.command": string;
+  /** Turn C# language features off (e.g. on very large solutions). */
+  "dotnet.languageServer.enabled": boolean;
+  /** Build before Run (dotnet run builds anyway; this shows errors in Problems first). */
+  "dotnet.buildBeforeRun": boolean;
 }
 
 export const defaultSettings: Settings = {
@@ -46,6 +52,9 @@ export const defaultSettings: Settings = {
   "terminal.integrated.fontSize": 13,
   "terminal.integrated.fontFamily": "'Cascadia Mono', Consolas, monospace",
   "terminal.integrated.shell": null,
+  "dotnet.languageServer.command": "roslyn-language-server",
+  "dotnet.languageServer.enabled": true,
+  "dotnet.buildBeforeRun": true,
 };
 
 const template = (s: Settings) => `// Frost settings. Keys use VS Code's names.

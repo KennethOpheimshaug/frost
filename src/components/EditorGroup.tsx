@@ -10,6 +10,20 @@ import type { Settings } from "../lib/settings";
 
 const editors = new Map<number, monaco.editor.IStandaloneCodeEditor>();
 
+// "Go to Definition" into another file opens it as a tab instead of doing nothing.
+monaco.editor.registerEditorOpener({
+  openCodeEditor(_source, resource, selectionOrPosition) {
+    if (resource.scheme !== "file") return false;
+    const pos = selectionOrPosition
+      ? "startLineNumber" in selectionOrPosition
+        ? { line: selectionOrPosition.startLineNumber, column: selectionOrPosition.startColumn }
+        : { line: selectionOrPosition.lineNumber, column: selectionOrPosition.column }
+      : undefined;
+    useStore.getState().openFile(resource.fsPath, pos ?? {});
+    return true;
+  },
+});
+
 /** The Monaco editor of the focused group (used by commands like "Go to Line"). */
 export const activeEditor = () => {
   const s = useStore.getState();
