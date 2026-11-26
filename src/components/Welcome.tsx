@@ -7,7 +7,7 @@ import { recentList, removeRecent, timeAgo, togglePinned, type RecentEntry } fro
 import { fuzzyFilter } from "../lib/fuzzy";
 import { showMenu } from "../lib/overlay";
 import { useStore } from "../store";
-import logo from "../assets/frost-logo.svg";
+import logo from "../assets/logo.svg";
 
 interface Props {
   onOpen: (folder: string, solution?: string) => void;
