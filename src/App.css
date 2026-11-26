@@ -1364,3 +1364,163 @@ button.run-config:hover {
   font-size: 11px;
   color: var(--fg-muted);
 }
+
+/* ---------- source control ---------- */
+
+.activity-badge {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  font-size: 10px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--button-fg);
+  background: var(--button-bg);
+}
+.tree-deco {
+  margin-left: auto;
+  padding-left: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.scm-commit {
+  padding: 0 12px 10px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.scm-message {
+  resize: vertical;
+  padding: 6px;
+  font: 13px var(--ui-font);
+  min-height: 46px;
+  border-radius: 3px;
+}
+.scm-buttons {
+  display: flex;
+  gap: 1px;
+}
+.scm-commit-button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 4px 0 0 4px;
+}
+.scm-split {
+  border-radius: 0 4px 4px 0;
+  padding: 6px 10px;
+}
+.scm-buttons .primary-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.secondary-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--input-border, var(--border));
+  border-radius: 4px;
+  padding: 5px 10px;
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  cursor: pointer;
+}
+.secondary-button:hover {
+  background: color-mix(in srgb, var(--fg) 14%, transparent);
+}
+.scm-busy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 0;
+}
+.scm-lists {
+  flex: 1;
+  overflow: auto;
+}
+.scm-group .section-header .badge {
+  margin-left: 4px;
+}
+.scm-row {
+  height: var(--row);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 0 20px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.scm-row:hover {
+  background: var(--list-hover);
+}
+.scm-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.scm-dir {
+  flex: 1;
+  font-size: 12px;
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.scm-actions {
+  display: none;
+}
+.scm-row:hover .scm-actions {
+  display: flex;
+}
+.scm-actions .icon-button {
+  width: 22px;
+  height: 22px;
+}
+.scm-letter {
+  width: 14px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex: none;
+}
+.scm-subtitle {
+  padding: 6px 20px 2px;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.branch-row .codicon-git-branch,
+.branch-row .codicon-cloud {
+  font-size: 14px;
+  color: var(--fg-muted);
+}
+.branch-row.current .scm-name {
+  font-weight: 600;
+}
+.branch-row.current .codicon-check {
+  color: var(--git-added);
+  font-size: 13px;
+}
+.diff-pane {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+.diff-toolbar {
+  height: 26px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 0 12px;
+}
+.diff-host {
+  flex: 1;
+  min-height: 0;
+}

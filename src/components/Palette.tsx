@@ -10,6 +10,7 @@ import { useStore, type PaletteMode } from "../store";
 import { searchSymbols, useCsharp } from "../lsp/roslyn";
 import { setStartup, useSolution } from "../dotnet/solution";
 import { attachToProcess } from "../dap/session";
+import { checkout, createBranch, loadBranches, useGit } from "../git/git";
 
 interface Item {
   key: string;
@@ -23,7 +24,7 @@ interface Item {
   preview?: () => void;
 }
 
-const prefixFor: Record<PaletteMode, string> = { commands: ">", files: "", line: ":", themes: "", symbols: "#", projects: "", processes: "" };
+const prefixFor: Record<PaletteMode, string> = { commands: ">", files: "", line: ":", themes: "", symbols: "#", projects: "", processes: "", branches: "" };
 
 export function Palette() {
   const palette = useStore((s) => s.palette)!;
@@ -52,11 +53,12 @@ export function Palette() {
     if (mode === "files" && root) api.listFiles(root).then(setFiles).catch(() => setFiles([]));
     if (mode === "themes") listThemes().then(setThemes);
     if (mode === "processes") api.listProcesses().then(setProcesses);
+    if (mode === "branches") loadBranches();
   }, [mode, root]);
 
   // Typing ">", ":" or "#" switches mode, like VS Code.
   const onChange = (v: string) => {
-    if (mode !== "themes" && mode !== "projects" && mode !== "processes") {
+    if (mode !== "themes" && mode !== "projects" && mode !== "processes" && mode !== "branches") {
       if (v.startsWith(">")) setMode("commands");
       else if (v.startsWith(":")) setMode("line");
       else if (v.startsWith("#")) setMode("symbols");
@@ -126,6 +128,27 @@ export function Palette() {
         icon: { icon: "codicon-symbol-" + symbolIcon(sym.kind) },
         run: () => useStore.getState().openFile(sym.path, { line: sym.line, column: sym.column }),
       }));
+    }
+
+    if (mode === "branches") {
+      const { branches, branch } = useGit.getState();
+      const create: Item = {
+        key: "@new",
+        label: query ? `Create new branch "${query.replace(/\s+/g, "-")}"` : "Create new branch… (type a name)",
+        icon: { icon: "codicon-add" },
+        run: () => (query ? createBranch(query) : undefined),
+      };
+      const list = fuzzyFilter(branches, query, (b) => b.name, 100).map(({ item: b, result }, i) => ({
+        key: (b.remote ? "r:" : "l:") + b.name,
+        label: b.name,
+        positions: result.positions,
+        group: !query && i === 0 ? "branches" : undefined,
+        detail: b.current || (!b.remote && b.name === branch) ? "current" : b.remote ? "remote" : b.upstream ? `→ ${b.upstream}` : "local",
+        icon: { icon: b.remote ? "codicon-cloud" : "codicon-git-branch" },
+        run: () => checkout(b),
+      }));
+      // Existing branches first when the text matches some; "create" only leads when nothing matches.
+      return list.length && query ? [...list, create] : [create, ...list];
     }
 
     if (mode === "processes") {
@@ -230,7 +253,9 @@ export function Palette() {
           placeholder={
             mode === "themes"
               ? "Select Color Theme (Up/Down keys to preview)"
-              : mode === "processes"
+              : mode === "branches"
+                ? "Select a branch to check out, or type a new branch name"
+                : mode === "processes"
                 ? "Attach to process (type a name or process id)"
                 : mode === "projects"
                 ? "Select the startup project to run"

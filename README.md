@@ -15,6 +15,15 @@ Status: **phase 2 in progress**. C# language support, the Solution view, buildin
 - **Settings** (`Ctrl+,`) in `settings.json`, using VS Code's key names, including `workbench.colorCustomizations` and `editor.tokenColorCustomizations`.
 - Auto save (`files.autoSave`), compact/comfortable layout, resizable side bar and panel, and a prompt before closing with unsaved changes.
 
+### Source control (Git)
+
+- **Source Control view** (`Ctrl+Shift+G`, below the terminal button): staged and unstaged changes with M/A/D/U markers. Click a file for a side-by-side **diff**, whose right side you can edit. Stage, unstage and discard per file or all at once.
+- **Commit** (`Ctrl+Enter` in the message box), **Commit & Push** (`Ctrl+Shift+Enter` or the cloud button), amend. With nothing staged, Commit commits all changes. `Ctrl+K` jumps to the message box, as in Rider.
+- **Push / Pull / Sync / Fetch.** "Publish" sets the upstream for new branches. Push is also on `Ctrl+Shift+K`.
+- **Branches:** the current branch and ahead/behind counts are in the status bar. The Branches section lists local and remote branches; double-click to check one out. A remote branch becomes a local tracking branch. Click the branch in the status bar to switch or create branches.
+- Changed files are colored in the explorer and tabs. Every git command and its output is in **Output → Git**.
+- Uses your installed Git and its normal settings and credentials (Git Credential Manager on Windows).
+
 ### C# (phase 2)
 
 - **C# language support** through Microsoft's Roslyn language server: completion, hover, go to definition / implementation, find references, rename across files, quick fixes and refactorings (`Ctrl+.`), formatting, signature help, inlay hints, outline (`Ctrl+Shift+O`), live errors, and **Go to Symbol in Workspace** (`Ctrl+T`, or `#` in the palette).
@@ -95,6 +104,9 @@ For debugging, Frost downloads netcoredbg on first use (or run **Debug: Download
 | Restart / stop debugging | `Ctrl+Shift+F5` / `Shift+F5` |
 | Run and Debug view / Debug Console | `Ctrl+Shift+D` / `Ctrl+Shift+Y` |
 | Attach to process | `Ctrl+Alt+P` |
+| Source Control / commit message | `Ctrl+Shift+G` / `Ctrl+K` |
+| Commit / commit & push (in message box) | `Ctrl+Enter` / `Ctrl+Shift+Enter` |
+| Push | `Ctrl+Shift+K` |
 
 ## Project layout
 
@@ -107,6 +119,7 @@ src/                     React frontend
   lsp/                   LSP client, Monaco bridge (all editor features), Roslyn launcher
   dotnet/                solution model, build (dotnet build -> Problems), run/watch/stop
   dap/                   Debug Adapter Protocol client, debug session, breakpoints, editor integration
+  git/                   git CLI wrapper (status, stage, commit, push/pull, branches) and diff tabs
   lib/
     api.ts               typed calls to the Rust commands
     highlighting.ts      Monaco + Shiki: TextMate grammars, VS Code themes, customizations

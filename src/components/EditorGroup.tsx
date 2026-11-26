@@ -8,6 +8,8 @@ import { useStore, type EditorGroup as Group } from "../store";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { attachDebugToEditor } from "../dap/editorDebug";
 import { addRunActions } from "../dotnet/editorRun";
+import { DiffPane, diffLabel, isDiffPath, parseDiffPath } from "../git/DiffPane";
+import { decorationFor, useGit } from "../git/git";
 import type { Settings } from "../lib/settings";
 
 const editors = new Map<number, monaco.editor.IStandaloneCodeEditor>();
@@ -126,7 +128,7 @@ export function EditorGroup({ group, index, focused }: { group: Group; index: nu
     if (!editor) return;
     const path = group.active;
     if (shownPath.current) viewStates.current.set(shownPath.current, editor.saveViewState());
-    if (!path) {
+    if (!path || isDiffPath(path)) {
       editor.setModel(null);
       shownPath.current = null;
       return;
@@ -193,13 +195,18 @@ export function EditorGroup({ group, index, focused }: { group: Group; index: nu
     });
   };
 
-  const crumbs = group.active ? (root ? relative(root, group.active) : group.active).split(/[\\/]/) : [];
+  const realActive = isDiffPath(group.active) ? parseDiffPath(group.active).path : group.active;
+  const crumbs = realActive ? (root ? relative(root, realActive) : realActive).split(/[\\/]/) : [];
+  const showingDiff = isDiffPath(group.active);
+  useGit((g) => g.changes);
 
   return (
     <div className={`editor-group ${focused ? "focused" : ""}`} onMouseDown={() => !focused && useStore.getState().focusGroup(index)}>
       <div className="tabs" onWheel={(e) => (e.currentTarget.scrollLeft += e.deltaY)} data-dirty={dirtyTick}>
         {group.tabs.map((path) => {
-          const icon = fileIcon(basename(path));
+          const real = isDiffPath(path) ? parseDiffPath(path).path : path;
+          const icon = fileIcon(basename(real));
+          const deco = isDiffPath(path) ? null : decorationFor(path);
           const dirty = isDirty(path);
           const active = path === group.active;
           return (
@@ -217,7 +224,9 @@ export function EditorGroup({ group, index, focused }: { group: Group; index: nu
               onContextMenu={(e) => tabMenu(e, path)}
             >
               <span className={`codicon ${icon.icon} file-icon`} style={{ color: icon.color }} />
-              <span className="tab-label">{basename(path)}</span>
+              <span className="tab-label" style={{ color: deco?.color }}>
+                {isDiffPath(path) ? diffLabel(path) : basename(path)}
+              </span>
               <button
                 className="tab-close icon-button"
                 onClick={(e) => {
@@ -248,7 +257,8 @@ export function EditorGroup({ group, index, focused }: { group: Group; index: nu
         </div>
       )}
       <div className="editor-host">
-        <div ref={containerRef} className="monaco-container" style={{ visibility: group.active && !error ? "visible" : "hidden" }} />
+        <div ref={containerRef} className="monaco-container" style={{ visibility: group.active && !error && !showingDiff ? "visible" : "hidden" }} />
+        {showingDiff && <DiffPane key={group.active!} spec={group.active!} />}
         {!group.active && <Watermark />}
         {error && <div className="editor-error">{error}</div>}
       </div>

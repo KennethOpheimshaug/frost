@@ -1,7 +1,7 @@
 // Output channels (Build, C# language server) shown in the bottom panel.
 import { create } from "zustand";
 
-export type Channel = "Build" | "C#" | "Frost";
+export type Channel = "Build" | "C#" | "Git" | "Frost";
 const MAX_LINES = 5000;
 
 interface OutputState {
@@ -11,7 +11,7 @@ interface OutputState {
 }
 
 export const useOutput = create<OutputState>((set) => ({
-  lines: { Build: [], "C#": [], Frost: [] },
+  lines: { Build: [], "C#": [], Git: [], Frost: [] },
   append: (channel, ...lines) =>
     set((s) => {
       const next = [...s.lines[channel], ...lines];

@@ -77,6 +77,11 @@ export function themeToCssVars(theme: ActiveTheme): Record<string, string> {
     "--scrollbar": get("scrollbarSlider.background", "panel.border"),
     "--modified": get("editorGutter.modifiedBackground", "gitDecoration.modifiedResourceForeground", "focusBorder"),
     "--error": get("errorForeground", "editorError.foreground") || "#f48771",
+    "--git-modified": get("gitDecoration.modifiedResourceForeground") || (theme.type === "light" ? "#895503" : "#e2c08d"),
+    "--git-added": get("gitDecoration.addedResourceForeground") || (theme.type === "light" ? "#587c0c" : "#81b88b"),
+    "--git-untracked": get("gitDecoration.untrackedResourceForeground") || (theme.type === "light" ? "#007100" : "#73c991"),
+    "--git-deleted": get("gitDecoration.deletedResourceForeground") || (theme.type === "light" ? "#ad0707" : "#c74e39"),
+    "--git-conflict": get("gitDecoration.conflictingResourceForeground") || "#e4676b",
   };
 }
 

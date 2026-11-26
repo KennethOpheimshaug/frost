@@ -96,7 +96,12 @@ pub async fn run_capture(command_name: String, args: Vec<String>, cwd: Option<St
     tauri::async_runtime::spawn_blocking(move || {
         let exe = which(&command_name).ok_or_else(|| format!("'{command_name}' was not found on PATH"))?;
         let mut c = Command::new(exe);
-        c.args(&args).env("DOTNET_CLI_UI_LANGUAGE", "en").env("DOTNET_NOLOGO", "1");
+        c.args(&args)
+            .env("DOTNET_CLI_UI_LANGUAGE", "en")
+            .env("DOTNET_NOLOGO", "1")
+            // git: fail instead of waiting for a password prompt nobody can see.
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("LC_ALL", "C");
         if let Some(d) = cwd.as_deref().filter(|d| Path::new(d).is_dir()) {
             c.current_dir(d);
         }

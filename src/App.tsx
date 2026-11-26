@@ -25,6 +25,8 @@ import { loadBreakpoints, toggleBreakpoint } from "./dap/breakpoints";
 import {
   continueRun, installDebugger, isDebugging, pause, restartDebugging, startDebugging, stepInto, stepOut, stepOver, stopDebugging, useDebug,
 } from "./dap/session";
+import { SourceControlView } from "./components/SourceControlView";
+import { commit, commitAndPush, fetchAll, openRepo, pull, push, refresh as refreshGit, sync, useGit } from "./git/git";
 import { notifyFileChanges, notifySaved, startCsharp, stopCsharp, useCsharp } from "./lsp/roslyn";
 import { Palette } from "./components/Palette";
 import "./App.css";
@@ -107,6 +109,7 @@ export default function App() {
   useEffect(() => {
     loadSolution(s.root);
     loadBreakpoints(s.root);
+    openRepo(s.root);
     if (!s.root || !csharpOn) {
       stopCsharp();
       return;
@@ -122,12 +125,20 @@ export default function App() {
 
   // Reload open files changed on disk (git checkout, other editors, Claude Code...).
   useEffect(() => {
+    let gitTimer: ReturnType<typeof setTimeout>;
+    const onFocus = () => refreshGit();
+    window.addEventListener("focus", onFocus);
     const un = api.onFsChange((c) => {
+      clearTimeout(gitTimer);
+      gitTimer = setTimeout(() => refreshGit(), 400);
       reloadFromDisk(c.paths);
       const changed = c.paths.filter((p) => !c.created.includes(p) && !c.removed.includes(p));
       notifyFileChanges(c.created, changed, c.removed);
     });
-    return () => void un.then((f) => f());
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      void un.then((f) => f());
+    };
   }, []);
 
   // Auto save.
@@ -355,6 +366,24 @@ export default function App() {
           if (root) startCsharp(root, { command: st().settings["dotnet.languageServer.command"], solution: useSolution.getState().solution });
         },
       },
+      { id: "view.scm", label: "View: Show Source Control", keybinding: "Ctrl+Shift+G", run: () => useStore.setState({ sidebar: "scm" }) },
+      {
+        id: "git.focusCommit",
+        label: "Git: Write Commit Message (Rider's Ctrl+K)",
+        keybinding: "Ctrl+K",
+        run: () => {
+          useStore.setState({ sidebar: "scm" });
+          requestAnimationFrame(() => (document.querySelector(".scm-message") as HTMLTextAreaElement | null)?.focus());
+        },
+      },
+      { id: "git.commit", label: "Git: Commit", run: () => commit() },
+      { id: "git.commitPush", label: "Git: Commit & Push", run: () => commitAndPush() },
+      { id: "git.amend", label: "Git: Amend Last Commit", run: () => commit({ amend: true }) },
+      { id: "git.push", label: "Git: Push", keybinding: "Ctrl+Shift+K", run: () => push() },
+      { id: "git.pull", label: "Git: Pull", run: () => pull() },
+      { id: "git.sync", label: "Git: Sync (Pull, then Push)", run: () => sync() },
+      { id: "git.fetch", label: "Git: Fetch", run: () => fetchAll() },
+      { id: "git.checkout", label: "Git: Check Out Branch… / Create Branch", run: () => st().openPalette("branches") },
       { id: "dev.reload", label: "Developer: Reload Window", run: () => location.reload() },
       { id: "dev.devtools", label: "Developer: Toggle Developer Tools (F12 in dev builds)", run: () => st().toast("Right-click → Inspect, or press F12, in a dev build (npm run tauri dev).") },
     ]);
@@ -412,7 +441,17 @@ export default function App() {
         {s.sidebar && (
           <>
             <aside className="sidebar" style={{ width: layout.sidebar }}>
-              {s.sidebar === "explorer" ? <Explorer onOpenFolder={() => openFolder()} /> : s.sidebar === "solution" ? <SolutionView /> : s.sidebar === "debug" ? <DebugView /> : <SearchView />}
+              {s.sidebar === "explorer" ? (
+                <Explorer onOpenFolder={() => openFolder()} />
+              ) : s.sidebar === "solution" ? (
+                <SolutionView />
+              ) : s.sidebar === "debug" ? (
+                <DebugView />
+              ) : s.sidebar === "scm" ? (
+                <SourceControlView />
+              ) : (
+                <SearchView />
+              )}
             </aside>
             <div className="sash vertical" onPointerDown={drag("sidebar")} />
           </>
@@ -486,7 +525,7 @@ function TitleBar({ onOpenFolder }: { onOpenFolder: () => void }) {
 function ActivityBar() {
   const sidebar = useStore((s) => s.sidebar);
   const panelOpen = useStore((s) => s.panelOpen);
-  const item = (view: "explorer" | "solution" | "search" | "debug", icon: string, title: string) => (
+  const item = (view: "explorer" | "solution" | "search" | "debug" | "scm", icon: string, title: string) => (
     <button className={`activity-item ${sidebar === view ? "active" : ""}`} title={title} onClick={() => useStore.getState().toggleSidebar(view)}>
       <span className={`codicon ${icon}`} />
     </button>
@@ -500,6 +539,7 @@ function ActivityBar() {
       <button className={`activity-item ${panelOpen ? "active-soft" : ""}`} title="Terminal (Ctrl+`)" onClick={() => useStore.getState().togglePanel()}>
         <span className="codicon codicon-terminal" />
       </button>
+      <ScmActivityItem active={sidebar === "scm"} />
       <div className="activity-spacer" />
       <button className="activity-item" title="Color Theme" onClick={() => useStore.getState().openPalette("themes")}>
         <span className="codicon codicon-symbol-color" />
@@ -525,6 +565,7 @@ function StatusBar({ file }: { file: string | null }) {
         <span className="status-item">
           <span className="codicon codicon-remote" /> {root ? basename(root) : "No folder"}
         </span>
+        <BranchStatus />
         <ProblemCounts />
         <BuildStatus />
         {file && isDirty(file) && <span className="status-item">● Unsaved</span>}
@@ -665,5 +706,36 @@ function CsharpStatus() {
     >
       <span className={`codicon ${icon}`} /> C#{status === "loading" || status === "starting" ? ": loading" : status === "missing" ? ": not installed" : status === "error" ? ": stopped" : ""}
     </span>
+  );
+}
+
+function ScmActivityItem({ active }: { active: boolean }) {
+  const count = useGit((g) => g.staged.length + g.changes.length);
+  const repo = useGit((g) => g.repo);
+  return (
+    <button className={`activity-item ${active ? "active" : ""}`} title="Source Control (Ctrl+Shift+G)" onClick={() => useStore.getState().toggleSidebar("scm")}>
+      <span className="codicon codicon-source-control" />
+      {repo && count > 0 && <span className="activity-badge">{count > 99 ? "99+" : count}</span>}
+    </button>
+  );
+}
+
+function BranchStatus() {
+  const { repo, branch, ahead, behind, upstream, busy } = useGit();
+  if (!repo || !branch) return null;
+  return (
+    <>
+      <span className="status-item clickable" title="Check out branch (Git: Check Out Branch…)" onClick={() => useStore.getState().openPalette("branches")}>
+        <span className="codicon codicon-git-branch" /> {branch}
+      </span>
+      <span
+        className="status-item clickable"
+        title={upstream ? `Sync with ${upstream}: ${behind} to pull, ${ahead} to push` : "Publish branch"}
+        onClick={() => (upstream ? sync() : push())}
+      >
+        <span className={`codicon ${busy ? "codicon-sync codicon-modifier-spin" : upstream ? "codicon-sync" : "codicon-cloud-upload"}`} />
+        {upstream && (ahead || behind) ? ` ${behind}↓ ${ahead}↑` : ""}
+      </span>
+    </>
   );
 }

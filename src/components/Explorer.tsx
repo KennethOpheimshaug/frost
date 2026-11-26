@@ -5,6 +5,7 @@ import { renameModels, disposeModel } from "../lib/models";
 import { fileIcon } from "../lib/icons";
 import { useStore } from "../store";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
+import { decorationFor, useGit } from "../git/git";
 
 const ROW = 22;
 
@@ -24,6 +25,8 @@ export function Explorer({ onOpenFolder }: { onOpenFolder: () => void }) {
   const openFile = useStore((s) => s.openFile);
   const toast = useStore((s) => s.toast);
   const activePath = useStore((s) => s.groups[s.activeGroup]?.active ?? null);
+  useGit((g) => g.changes);
+  useGit((g) => g.staged);
 
   const [children, setChildren] = useState<Record<string, DirEntry[]>>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -315,6 +318,7 @@ export function Explorer({ onOpenFolder }: { onOpenFolder: () => void }) {
             const isOpen = expanded.has(entry.path);
             const renaming = edit?.kind === "rename" && edit.path === entry.path;
             const icon = entry.isDir ? null : fileIcon(entry.name);
+            const deco = entry.isDir ? null : decorationFor(entry.path);
             return (
               <div
                 key={entry.path}
@@ -368,7 +372,16 @@ export function Explorer({ onOpenFolder }: { onOpenFolder: () => void }) {
                 {renaming ? (
                   <InlineInput initial={entry.name} onDone={commitEdit} onCancel={() => setEdit(null)} />
                 ) : (
-                  <span className="tree-label">{entry.name}</span>
+                  <>
+                    <span className="tree-label" style={{ color: deco?.color }}>
+                      {entry.name}
+                    </span>
+                    {deco && (
+                      <span className="tree-deco" style={{ color: deco.color }}>
+                        {deco.letter}
+                      </span>
+                    )}
+                  </>
                 )}
               </div>
             );
