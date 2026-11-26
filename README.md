@@ -52,7 +52,21 @@ Restart Frost afterwards. The status bar shows `✓ C#` when it's ready. If the 
 
 For debugging, Frost downloads netcoredbg on first use (or run **Debug: Download netcoredbg** from the command palette). To use your own copy, set `"dotnet.debugger.path"`.
 
-## Run it on Windows
+## Install Frost and pin it to the taskbar (Windows)
+
+After the prerequisites below are installed, double-click **`Frost.cmd`** in the repo (or run it from a terminal). It:
+
+1. builds a release version of Frost (the first build takes several minutes),
+2. installs it to `%LOCALAPPDATA%\Programs\Frost\Frost.exe`,
+3. creates **Frost** shortcuts in the Start menu and on the Desktop.
+
+Then open the Start menu, type **Frost**, right-click it and choose **Pin to taskbar**. Windows doesn't let scripts pin to the taskbar, so this one click is yours.
+
+To update later, run `Frost.cmd -Update`: it does `git pull`, rebuilds and replaces the installed copy (close Frost first). Other options: `-Launch` starts Frost when it's done, and `-NoDesktop` skips the Desktop shortcut.
+
+When Frost starts, the **welcome screen** shows recent projects (search, pin, remove), Open Folder, Open Solution, **Clone Repository** and **New Project** (console, Web API, Blazor, worker, class library, xUnit/NUnit, WPF, WinForms, optionally with a solution). Return to it any time with **File: Show Welcome Screen**. To reopen the last folder at startup instead, set `"workbench.startupEditor": "lastFolder"`.
+
+## Run it on Windows (development)
 
 1. Install the prerequisites (once):
    - [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/), with the "Desktop development with C++" workload
@@ -113,6 +127,7 @@ For debugging, Frost downloads netcoredbg on first use (or run **Debug: Download
 ```
 src/                     React frontend
   App.tsx                layout, commands, keybindings, title/activity/status bars
+  components/Welcome.tsx start window (recent projects, new project, clone)
   store.ts               workbench state (zustand)
   components/            Explorer, SolutionView, EditorGroup, BottomPanel (Problems/Output/Terminal),
                          TerminalPanel, SearchView, Palette, ContextMenu
@@ -127,6 +142,7 @@ src/                     React frontend
     models.ts            one text model per file, dirty tracking, reload from disk
     settings.ts          settings.json (JSONC) load/save
     uiColors.ts          theme colors -> CSS variables + terminal colors
+scripts/install-frost.ps1  build + install + Start menu/Desktop shortcuts (run via Frost.cmd)
 src-tauri/src/           Rust backend
   fs.rs                  file operations
   watch.rs               file watcher (batched events)

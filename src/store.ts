@@ -30,6 +30,8 @@ interface Reveal {
 
 interface State {
   root: string | null;
+  /** The start window is showing instead of the workbench. */
+  welcome: boolean;
   settings: Settings;
   theme: ActiveTheme | null;
   groups: EditorGroup[];
@@ -78,6 +80,7 @@ const underPrefix = (path: string, prefix: string) => {
 
 export const useStore = create<State>((set, get) => ({
   root: null,
+  welcome: false,
   settings: defaultSettings,
   theme: null,
   groups: [{ id: 0, tabs: [], active: null }],

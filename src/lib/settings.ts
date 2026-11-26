@@ -13,6 +13,8 @@ export interface Settings {
   "workbench.colorCustomizations": Record<string, unknown>;
   "editor.tokenColorCustomizations": { textMateRules?: TokenColorRule[] } & Record<string, unknown>;
   "workbench.density": "compact" | "comfortable";
+  /** What Frost shows when it starts: the welcome screen, or the last opened folder. */
+  "workbench.startupEditor": "welcome" | "lastFolder";
   "editor.fontSize": number;
   "editor.fontFamily": string;
   "editor.fontLigatures": boolean;
@@ -41,6 +43,7 @@ export const defaultSettings: Settings = {
   "workbench.colorCustomizations": {},
   "editor.tokenColorCustomizations": {},
   "workbench.density": "compact",
+  "workbench.startupEditor": "welcome",
   "editor.fontSize": 14,
   "editor.fontFamily": "'Cascadia Code', 'JetBrains Mono', Consolas, 'Courier New', monospace",
   "editor.fontLigatures": true,

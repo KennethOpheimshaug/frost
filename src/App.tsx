@@ -26,6 +26,8 @@ import {
   continueRun, installDebugger, isDebugging, pause, restartDebugging, startDebugging, stepInto, stepOut, stepOver, stopDebugging, useDebug,
 } from "./dap/session";
 import { SourceControlView } from "./components/SourceControlView";
+import { Welcome } from "./components/Welcome";
+import { addRecent } from "./lib/recent";
 import { commit, commitAndPush, fetchAll, openRepo, pull, push, refresh as refreshGit, sync, useGit } from "./git/git";
 import { notifyFileChanges, notifySaved, startCsharp, stopCsharp, useCsharp } from "./lsp/roslyn";
 import { Palette } from "./components/Palette";
@@ -47,11 +49,16 @@ export default function App() {
 
   // --- folder ---
 
-  const openFolder = useCallback(async (path?: string) => {
+  const openFolder = useCallback(async (path?: string, solution?: string) => {
     const folder = path ?? ((await open({ directory: true, title: "Open Folder" })) as string | null);
     if (!folder) return;
     if (dirtyPaths().length && !(await ask("You have unsaved changes. Open another folder anyway?", { kind: "warning" }))) return;
+    // Opened through a solution or project file: load that one.
+    if (solution && /\.slnx?$/i.test(solution)) localStorage.setItem(`frost.solution.${folder.toLowerCase()}`, solution);
+    if (solution && /proj$/i.test(solution)) localStorage.setItem(`frost.startup.${folder.toLowerCase()}`, solution);
     useStore.getState().setRoot(folder);
+    useStore.setState({ welcome: false });
+    addRecent(folder, solution);
     localStorage.setItem(LAST_FOLDER, folder);
     api.watchFolder(folder).catch((e) => useStore.getState().toast(`Can't watch folder: ${e}`, "error"));
     getCurrentWindow().setTitle(`${basename(folder)} — Frost`);
@@ -65,13 +72,18 @@ export default function App() {
     (async () => {
       const settings = await loadSettings();
       useStore.getState().setSettings(settings);
-      const last = (await api.startupFolder()) ?? localStorage.getItem(LAST_FOLDER);
+      // A folder on the command line opens directly; otherwise the welcome screen, unless
+      // "workbench.startupEditor" is "lastFolder".
+      const cli = await api.startupFolder();
+      const last = cli ?? (settings["workbench.startupEditor"] === "lastFolder" ? localStorage.getItem(LAST_FOLDER) : null);
+      if (!last) useStore.setState({ welcome: true });
       if (last) {
         try {
           await api.listDir(last);
           openFolder(last);
         } catch {
           localStorage.removeItem(LAST_FOLDER);
+          useStore.setState({ welcome: true });
         }
       }
     })();
@@ -230,6 +242,7 @@ export default function App() {
         run: () => {
           localStorage.removeItem(LAST_FOLDER);
           st().setRoot(null);
+          useStore.setState({ welcome: true });
           getCurrentWindow().setTitle("Frost");
         },
       },
@@ -313,6 +326,7 @@ export default function App() {
         label: "View: Toggle Compact / Comfortable Layout",
         run: () => setSetting("workbench.density", (st().settings["workbench.density"] === "compact" ? "comfortable" : "compact") as never),
       },
+      { id: "file.welcome", label: "File: Show Welcome Screen", run: () => useStore.setState({ welcome: true }) },
       { id: "palette.symbols", label: "Go to Symbol in Workspace…", keybinding: "Ctrl+T", run: () => st().openPalette("symbols") },
       { id: "build.build", label: "Build: Build Solution", keybinding: "Ctrl+Shift+B", run: () => buildAll("build") },
       { id: "build.rebuild", label: "Build: Rebuild Solution", run: () => buildAll("rebuild") },
@@ -470,6 +484,7 @@ export default function App() {
         </div>
       </div>
       <StatusBar file={current} />
+      {s.welcome && <Welcome onOpen={(folder, solution) => openFolder(folder, solution)} onClose={s.root ? () => useStore.setState({ welcome: false }) : undefined} />}
       {s.palette && <Palette />}
       <Overlays />
       <div className="toasts">
