@@ -39,7 +39,8 @@ export function Explorer({ onOpenFolder }: { onOpenFolder: () => void }) {
 
   const load = useCallback(async (dir: string) => {
     try {
-      const list = await api.listDir(dir);
+      // Like VS Code, the .git folder isn't shown.
+      const list = (await api.listDir(dir)).filter((e) => e.name !== ".git");
       setChildren((c) => ({ ...c, [dir]: list }));
     } catch {
       setChildren((c) => {

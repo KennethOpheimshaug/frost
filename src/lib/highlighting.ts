@@ -1,7 +1,7 @@
 // Monaco setup + VS Code themes and TextMate grammars (through Shiki).
 import * as monaco from "./monaco-core";
 import EditorWorker from "monaco-editor/editor/editor.worker.js?worker";
-import { createHighlighter, bundledThemesInfo, type Highlighter } from "shiki";
+import { createHighlighter, bundledThemes, bundledThemesInfo, type Highlighter } from "shiki";
 import { shikiToMonaco } from "@shikijs/monaco";
 import { api, basename, join } from "./api";
 import { parseJsonc, type Settings } from "./settings";
@@ -27,6 +27,9 @@ export interface ActiveTheme {
 }
 
 let highlighter: Highlighter | null = null;
+// shikiToMonaco wraps these each time it runs; keep the originals so wrappers never stack.
+const baseSetTheme = monaco.editor.setTheme.bind(monaco.editor);
+const baseCreate = monaco.editor.create;
 const registeredLangs = new Set<string>();
 let themeCounter = 0;
 let currentMonacoTheme = "";
@@ -43,8 +46,23 @@ function syncMonaco(h: Highlighter) {
       registeredLangs.add(id);
     }
   }
-  shikiToMonaco(h, monaco as never);
-  if (currentMonacoTheme) monaco.editor.setTheme(currentMonacoTheme);
+  monaco.editor.setTheme = baseSetTheme;
+  (monaco.editor as { create: typeof baseCreate }).create = baseCreate;
+  try {
+    shikiToMonaco(h, monaco as never);
+  } catch (e) {
+    // It ends by switching to the first loaded theme; that can fail harmlessly, we set ours next.
+    console.warn("shikiToMonaco:", e);
+  }
+  if (currentMonacoTheme) setMonacoTheme(currentMonacoTheme);
+}
+
+function setMonacoTheme(name: string) {
+  try {
+    monaco.editor.setTheme(name);
+  } catch (e) {
+    console.warn(`Couldn't switch the editor to theme ${name}:`, e);
+  }
 }
 
 /** Loads the TextMate grammar for `lang` the first time it's needed. */
@@ -103,8 +121,10 @@ interface RawTheme {
 
 async function loadRawTheme(info: ThemeInfo, h: Highlighter): Promise<RawTheme> {
   if (info.source === "builtin") {
-    await h.loadTheme(info.ref as never);
-    const t = h.getTheme(info.ref) as unknown as RawTheme;
+    // Read the theme's JSON without registering it, so only the active theme lives in the highlighter.
+    void h;
+    const mod = await bundledThemes[info.ref as keyof typeof bundledThemes]();
+    const t = ((mod as { default?: unknown }).default ?? mod) as RawTheme;
     return { ...t, tokenColors: t.tokenColors ?? t.settings };
   }
   const raw = parseJsonc<RawTheme>(await api.readFile(info.ref));
@@ -160,7 +180,6 @@ export async function applyTheme(label: string, settings: Settings): Promise<Act
   } as never);
   currentMonacoTheme = name;
   syncMonaco(h);
-  monaco.editor.setTheme(name);
   return { label: info.label, type, colors };
 }
 
