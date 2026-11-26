@@ -25,6 +25,7 @@ function ensureListening() {
 export function runProject(mode: "run" | "watch", projectPath?: string, opts: { noBuild?: boolean } = {}) {
   ensureListening();
   const project = projectPath ?? useSolution.getState().startup;
+  // (callers resolve "the project of the open file" before calling when there's no startup project)
   if (!project) {
     useStore.getState().openPalette("projects");
     return;

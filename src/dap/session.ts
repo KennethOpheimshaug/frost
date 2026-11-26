@@ -115,8 +115,11 @@ async function targetPath(project: string, tfms: string[]): Promise<string | nul
 /** F5: builds the startup project and debugs it. */
 export async function startDebugging(projectPath?: string) {
   const sol = useSolution.getState();
-  const project = sol.projects.find((p) => samePath(p.path, projectPath ?? sol.startup ?? ""));
-  if (!project) return toast("No runnable project to debug. Set a startup project in the toolbar.", "error");
+  const path = projectPath ?? sol.startup;
+  if (!path) return useStore.getState().openPalette("projects");
+  // Also works for a project the solution model doesn't know (e.g. found next to the open file).
+  const project = sol.projects.find((p) => samePath(p.path, path)) ?? (await api.readProject(path).catch(() => null));
+  if (!project) return toast(`Couldn't read ${path}.`, "error");
   lastStart = () => startDebugging(project.path);
   if (useDebug.getState().status !== "inactive") await stopDebugging();
 

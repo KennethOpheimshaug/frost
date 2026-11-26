@@ -16,7 +16,7 @@ import { BottomPanel } from "./components/BottomPanel";
 import { SolutionView } from "./components/SolutionView";
 import { ContextMenu, type MenuItem } from "./components/ContextMenu";
 import { allProblems, useProblems } from "./lib/problems";
-import { buildTarget, loadSolution, setStartup, useSolution } from "./dotnet/solution";
+import { buildTarget, loadSolution, projectToRun, setStartup, useSolution } from "./dotnet/solution";
 import { cancelBuild, runBuild, useBuild } from "./dotnet/build";
 import { runProject, stopRun, useRun } from "./dotnet/run";
 import { DebugToolbar, DebugView } from "./components/DebugView";
@@ -193,7 +193,7 @@ export default function App() {
       return runBuild(kind, target);
     };
     const runStartup = async () => {
-      const startup = useSolution.getState().startup;
+      const startup = await projectToRun(activeFile());
       if (!startup) return runProject("run");
       if (useRun.getState().project) stopRun();
       if (!st().settings["dotnet.buildBeforeRun"]) return runProject("run", startup);
@@ -309,17 +309,17 @@ export default function App() {
       { id: "build.restore", label: "Build: Restore NuGet Packages", run: () => buildAll("restore") },
       { id: "build.cancel", label: "Build: Cancel Build", keybinding: "Ctrl+Pause", run: () => cancelBuild() },
       { id: "run.run", label: "Run: Run Startup Project", keybinding: "Ctrl+F5", keys: ["Shift+F10"], run: () => runStartup() },
-      { id: "run.watch", label: "Run: Run with Hot Reload (dotnet watch)", keybinding: "Ctrl+Alt+F5", run: () => runProject("watch") },
+      { id: "run.watch", label: "Run: Run with Hot Reload (dotnet watch)", keybinding: "Ctrl+Alt+F5", run: async () => runProject("watch", (await projectToRun(activeFile())) ?? undefined) },
       { id: "run.stop", label: "Run: Stop", keybinding: "Shift+F5", keys: ["Ctrl+F2"], run: () => (isDebugging() ? stopDebugging() : stopRun()) },
       {
         id: "debug.start",
         label: "Debug: Start Debugging / Continue",
         keybinding: "F5",
         keys: ["Shift+F9"],
-        run: () => {
+        run: async () => {
           const status = useDebug.getState().status;
           if (status === "stopped") continueRun();
-          else if (status === "inactive") startDebugging();
+          else if (status === "inactive") startDebugging((await projectToRun(activeFile())) ?? undefined);
         },
       },
       { id: "debug.restart", label: "Debug: Restart", keybinding: "Ctrl+Shift+F5", run: () => restartDebugging() },

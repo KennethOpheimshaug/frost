@@ -136,3 +136,35 @@ export function buildTarget(): string | null {
   const s = useSolution.getState();
   return s.solution ?? (s.projects.length === 1 ? s.projects[0].path : s.root);
 }
+
+/**
+ * The project a file belongs to: a loaded project whose folder contains it, else the
+ * nearest .csproj found by walking up from the file (works even if solution loading failed).
+ */
+export async function projectForFile(file: string): Promise<string | null> {
+  const norm = (p: string) => p.replace(/\\/g, "/").toLowerCase();
+  const f = norm(file);
+  const loaded = useSolution
+    .getState()
+    .projects.filter((p) => f.startsWith(norm(p.dir) + "/"))
+    .sort((a, b) => b.dir.length - a.dir.length)[0];
+  if (loaded) return loaded.path;
+  let dir = dirname(file);
+  for (let i = 0; i < 12; i++) {
+    try {
+      const hit = (await api.listDir(dir)).find((e) => !e.isDir && /\.(csproj|fsproj|vbproj)$/i.test(e.name));
+      if (hit) return hit.path;
+    } catch {
+      return null;
+    }
+    const up = dirname(dir);
+    if (up === dir) return null;
+    dir = up;
+  }
+  return null;
+}
+
+/** The project to run: the startup project, else the one containing the open file. */
+export async function projectToRun(activeFile: string | null): Promise<string | null> {
+  return useSolution.getState().startup ?? (activeFile ? await projectForFile(activeFile) : null);
+}

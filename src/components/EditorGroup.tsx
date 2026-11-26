@@ -7,6 +7,7 @@ import { fileIcon } from "../lib/icons";
 import { useStore, type EditorGroup as Group } from "../store";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { attachDebugToEditor } from "../dap/editorDebug";
+import { addRunActions } from "../dotnet/editorRun";
 import type { Settings } from "../lib/settings";
 
 const editors = new Map<number, monaco.editor.IStandaloneCodeEditor>();
@@ -91,6 +92,7 @@ export function EditorGroup({ group, index, focused }: { group: Group; index: nu
       glyphMargin: true,
     });
     const debugSubs = attachDebugToEditor(editor);
+    const runActions = addRunActions(editor);
     editorRef.current = editor;
     editors.set(group.id, editor);
     const subs = [
@@ -108,6 +110,7 @@ export function EditorGroup({ group, index, focused }: { group: Group; index: nu
     return () => {
       subs.forEach((d) => d.dispose());
       debugSubs.dispose();
+      runActions.forEach((a) => a.dispose());
       editors.delete(group.id);
       editor.dispose();
     };
