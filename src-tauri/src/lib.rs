@@ -1,3 +1,4 @@
+mod debug;
 mod dotnet;
 mod fs;
 mod proc;
@@ -38,6 +39,10 @@ pub fn run() {
             dotnet::find_dotnet_workspace,
             dotnet::read_solution,
             dotnet::read_project,
+            debug::find_debugger,
+            debug::install_netcoredbg,
+            debug::run_capture,
+            debug::list_processes,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

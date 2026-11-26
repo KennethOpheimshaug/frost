@@ -2,7 +2,7 @@
 
 A fast, personal IDE for C#, mixing the feel of VS Code, Rider and PyCharm. Built with **Tauri 2** (a Rust backend and the system WebView) and **React + TypeScript**. The editor is **Monaco**. Syntax colors come from real **TextMate grammars and VS Code themes** (through Shiki).
 
-Status: **phase 2 in progress**. C# language support, the Solution view, building and running work. The debugger is next. Claude Code integration comes in phase 3.
+Status: **phase 2 in progress**. C# language support, the Solution view, building, running and debugging work. Claude Code integration comes in phase 3.
 
 ## What works now
 
@@ -22,6 +22,15 @@ Status: **phase 2 in progress**. C# language support, the Solution view, buildin
 - **Build** (`Ctrl+Shift+B`), rebuild, clean, restore, cancel. Errors and warnings land in the **Problems** panel (`Ctrl+Shift+M`), merged with live errors from Roslyn. The full log is in **Output** (`Ctrl+Shift+U`). Packages are restored automatically when Roslyn asks for it.
 - **Run** the startup project (`Ctrl+F5` or `Shift+F10`): it builds first, shows errors in Problems, then runs in a terminal tab. **Run with Hot Reload** (`dotnet watch`, `Ctrl+Alt+F5`). **Stop** (`Shift+F5` or `Ctrl+F2`). Pick the startup project from the toolbar.
 
+### Debugging (phase 2)
+
+- **Debug** the startup project with `F5` (or `Shift+F9`). Frost builds in Debug, asks MSBuild for the program to start, and launches it under **netcoredbg**, the open-source .NET debugger from Samsung. If netcoredbg isn't installed, Frost offers to download it from GitHub.
+- **Breakpoints:** click the gutter or press `F9` (`Ctrl+F8`). Right-click for **conditional breakpoints**, **hit counts** and **logpoints**. Breakpoints are saved per folder, stay on the right code when you edit above them, and show hollow when they couldn't bind.
+- **While paused:** the current line is highlighted, and **inline values** appear next to the code, Rider-style. Hover a variable or `a.b.c` to see its value. The **Run and Debug** view (`Ctrl+Shift+D`) shows **Variables** (double-click to change a value), **Watch**, **Call Stack** (click a frame to jump there) and **Breakpoints**, plus "All exceptions" / "User-unhandled exceptions".
+- **Stepping:** Continue `F5`, Step Over `F10` (`F8`), Step Into `F11` (`F7`), Step Out `Shift+F11` (`Shift+F8`), Pause `F6`, Restart `Ctrl+Shift+F5`, Stop `Shift+F5`. A floating debug toolbar shows them all.
+- **Debug Console** (`Ctrl+Shift+Y`): program output, plus evaluating C# expressions in the current frame.
+- **Attach to Process** (`Ctrl+Alt+P`): pick a running process by name or id.
+
 #### One-time setup for C#
 
 Install the [.NET SDK](https://dot.net) (8 or newer, 10 recommended), then the language server:
@@ -31,6 +40,8 @@ dotnet tool install --global roslyn-language-server --prerelease
 ```
 
 Restart Frost afterwards. The status bar shows `✓ C#` when it's ready. If the server is installed somewhere else, set `"dotnet.languageServer.command"` in settings.
+
+For debugging, Frost downloads netcoredbg on first use (or run **Debug: Download netcoredbg** from the command palette). To use your own copy, set `"dotnet.debugger.path"`.
 
 ## Run it on Windows
 
@@ -78,6 +89,12 @@ Restart Frost afterwards. The status bar shows `✓ C#` when it's ready. If the 
 | Quick fix | `Ctrl+.` |
 | Rename symbol | `F2` |
 | Go to definition / references | `F12` / `Shift+F12` |
+| Start debugging / continue | `F5` (`Shift+F9`) |
+| Step over / into / out | `F10` (`F8`) / `F11` (`F7`) / `Shift+F11` (`Shift+F8`) |
+| Toggle breakpoint | `F9` (`Ctrl+F8`) |
+| Restart / stop debugging | `Ctrl+Shift+F5` / `Shift+F5` |
+| Run and Debug view / Debug Console | `Ctrl+Shift+D` / `Ctrl+Shift+Y` |
+| Attach to process | `Ctrl+Alt+P` |
 
 ## Project layout
 
@@ -89,6 +106,7 @@ src/                     React frontend
                          TerminalPanel, SearchView, Palette, ContextMenu
   lsp/                   LSP client, Monaco bridge (all editor features), Roslyn launcher
   dotnet/                solution model, build (dotnet build -> Problems), run/watch/stop
+  dap/                   Debug Adapter Protocol client, debug session, breakpoints, editor integration
   lib/
     api.ts               typed calls to the Rust commands
     highlighting.ts      Monaco + Shiki: TextMate grammars, VS Code themes, customizations
@@ -103,6 +121,7 @@ src-tauri/src/           Rust backend
   pty.rs                 terminals (portable-pty)
   proc.rs                language servers (LSP over stdio) and tools with streamed output
   dotnet.rs              .NET SDK detection, .sln/.slnx/.csproj reading
+  debug.rs               netcoredbg install/lookup, MSBuild queries, process list for attach
 ```
 
 ## Where settings and themes live
@@ -112,6 +131,6 @@ src-tauri/src/           Rust backend
 
 ## Next in phase 2
 
-- Debugger (DAP, netcoredbg first): breakpoints, inline values, watch, call stack, attach.
+- Exception popup at the throwing line, and hot reload while debugging.
 - .NET build host: MSBuild binary logs, live per-project progress, an exact project model.
 - Test explorer and decompiled "go to definition" into libraries.

@@ -1048,3 +1048,319 @@ button.run-config:hover {
 .status-item .codicon-warning {
   font-size: 13px;
 }
+
+/* ---------- debugging ---------- */
+
+.bp-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.bp-glyph::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #e51400;
+  margin-left: 4px;
+}
+.bp-glyph.bp-conditional::before {
+  background: #e51400;
+  box-shadow: inset 0 0 0 2px #e51400, inset 0 0 0 4px #ffcc66;
+}
+.bp-glyph.bp-log::before {
+  border-radius: 2px;
+  transform: rotate(45deg) scale(0.85);
+  background: #e51400;
+}
+.bp-glyph.disabled::before {
+  background: #848484;
+}
+.bp-glyph.unverified::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px #848484;
+}
+.bp-line {
+  background: color-mix(in srgb, #e51400 9%, transparent);
+}
+.debug-current-line {
+  background: color-mix(in srgb, #ffcc00 22%, transparent) !important;
+}
+.debug-frame-line {
+  background: color-mix(in srgb, #7ac142 18%, transparent) !important;
+}
+.debug-current-glyph::after,
+.debug-frame-glyph::after {
+  content: "\eb8b"; /* codicon debug-stackframe */
+  font-family: codicon;
+  font-size: 16px;
+  color: #ffcc00;
+  margin-left: 2px;
+  position: relative;
+  z-index: 2;
+}
+.debug-frame-glyph::after {
+  color: #7ac142;
+}
+.debug-inline-value {
+  color: color-mix(in srgb, var(--editor-fg) 55%, #c586c0);
+  font-style: italic;
+  opacity: 0.85;
+}
+
+.debug-start {
+  padding: 4px 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.debug-start .primary-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.debug-start .primary-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.link-button {
+  border: 0;
+  background: none;
+  color: var(--list-highlight);
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+.debug-sections {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+.debug-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.debug-section.grow {
+  flex: 1;
+}
+.debug-section .section-header {
+  cursor: pointer;
+}
+.debug-section-body {
+  overflow: auto;
+  max-height: 260px;
+  padding: 2px 0 6px;
+}
+.debug-section.grow .debug-section-body {
+  max-height: none;
+  flex: 1;
+}
+.debug-empty {
+  padding: 4px 20px;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+.var-row,
+.stack-frame,
+.bp-row,
+.stack-thread {
+  min-height: var(--row);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: default;
+  position: relative;
+}
+.var-row:hover,
+.stack-frame:hover,
+.bp-row:hover {
+  background: var(--list-hover);
+}
+.var-name {
+  color: color-mix(in srgb, var(--fg) 70%, #9cdcfe);
+}
+.var-scope {
+  font-weight: 600;
+}
+.var-sep {
+  color: var(--fg-muted);
+}
+.var-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: text;
+}
+.var-value.str {
+  color: #ce9178;
+}
+.var-value.num {
+  color: #b5cea8;
+}
+.var-value.kw {
+  color: #569cd6;
+}
+:root[data-theme-type="light"] .var-value.str {
+  color: #a31515;
+}
+:root[data-theme-type="light"] .var-value.num {
+  color: #098658;
+}
+:root[data-theme-type="light"] .var-value.kw {
+  color: #0000ff;
+}
+:root[data-theme-type="light"] .var-name {
+  color: #001080;
+}
+.watch-row {
+  flex-wrap: nowrap;
+}
+.watch-row > .var-row {
+  flex: 1;
+}
+.row-action {
+  position: absolute;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  visibility: hidden;
+  background: var(--sidebar-bg);
+}
+.var-row:hover > .row-action,
+.bp-row:hover > .row-action {
+  visibility: visible;
+}
+.stack-thread {
+  padding-left: 12px;
+  font-size: 12px;
+}
+.stack-frame {
+  padding-left: 28px;
+  cursor: pointer;
+  justify-content: space-between;
+  padding-right: 8px;
+}
+.stack-frame.selected {
+  background: var(--list-inactive);
+}
+.stack-frame.external {
+  opacity: 0.55;
+  cursor: default;
+}
+.frame-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bp-row {
+  padding-left: 16px;
+  cursor: pointer;
+}
+.bp-row input {
+  margin: 0 2px 0 0;
+}
+.bp-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #e51400;
+  flex: none;
+}
+.bp-dot.conditional {
+  box-shadow: 0 0 0 2px #ffcc66 inset;
+}
+.bp-dot.log {
+  border-radius: 2px;
+  transform: rotate(45deg);
+}
+.bp-dot.unverified {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px #848484;
+}
+
+.editor-area {
+  position: relative;
+}
+.debug-toolbar {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  gap: 2px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: var(--widget-bg);
+  border: 1px solid var(--widget-border);
+  box-shadow: 0 2px 8px var(--shadow);
+}
+.debug-toolbar .codicon-debug-continue,
+.debug-toolbar .codicon-debug-restart {
+  color: #59a869;
+}
+.debug-toolbar .codicon-debug-stop {
+  color: #e05252;
+}
+.debug-toolbar .codicon-debug-step-over,
+.debug-toolbar .codicon-debug-step-into,
+.debug-toolbar .codicon-debug-step-out,
+.debug-toolbar .codicon-debug-pause {
+  color: #4fa3f7;
+}
+
+.debug-console {
+  flex: 1;
+  overflow: auto;
+  padding: 4px 16px;
+  font: 12px/1.45 "Cascadia Mono", Consolas, monospace;
+  user-select: text;
+}
+.console-line {
+  white-space: pre-wrap;
+}
+.console-line.stderr,
+.console-line.error {
+  color: var(--error);
+}
+.console-line.console {
+  color: var(--fg-muted);
+}
+.console-line.input {
+  color: var(--focus);
+}
+.console-input {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 12px 6px;
+}
+.console-input .text-input {
+  flex: 1;
+  height: 24px;
+  padding: 0 6px;
+  font-family: "Cascadia Mono", Consolas, monospace;
+}
+.exception-banner {
+  margin: 0 12px 4px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--error) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--error) 50%, transparent);
+  user-select: text;
+}
+.input-title {
+  padding: 4px 4px 8px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.input-hint {
+  padding: 6px 4px 0;
+  font-size: 11px;
+  color: var(--fg-muted);
+}

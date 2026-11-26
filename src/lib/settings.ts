@@ -32,6 +32,8 @@ export interface Settings {
   "dotnet.languageServer.enabled": boolean;
   /** Build before Run (dotnet run builds anyway; this shows errors in Problems first). */
   "dotnet.buildBeforeRun": boolean;
+  /** Full path of netcoredbg, if it isn't on PATH (Frost can also download it). */
+  "dotnet.debugger.path": string | null;
 }
 
 export const defaultSettings: Settings = {
@@ -55,6 +57,7 @@ export const defaultSettings: Settings = {
   "dotnet.languageServer.command": "roslyn-language-server",
   "dotnet.languageServer.enabled": true,
   "dotnet.buildBeforeRun": true,
+  "dotnet.debugger.path": null,
 };
 
 const template = (s: Settings) => `// Frost settings. Keys use VS Code's names.

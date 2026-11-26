@@ -9,6 +9,7 @@ import { activeEditor } from "./EditorGroup";
 import { useStore, type PaletteMode } from "../store";
 import { searchSymbols, useCsharp } from "../lsp/roslyn";
 import { setStartup, useSolution } from "../dotnet/solution";
+import { attachToProcess } from "../dap/session";
 
 interface Item {
   key: string;
@@ -22,7 +23,7 @@ interface Item {
   preview?: () => void;
 }
 
-const prefixFor: Record<PaletteMode, string> = { commands: ">", files: "", line: ":", themes: "", symbols: "#", projects: "" };
+const prefixFor: Record<PaletteMode, string> = { commands: ">", files: "", line: ":", themes: "", symbols: "#", projects: "", processes: "" };
 
 export function Palette() {
   const palette = useStore((s) => s.palette)!;
@@ -33,6 +34,7 @@ export function Palette() {
   const [index, setIndex] = useState(0);
   const [files, setFiles] = useState<string[]>([]);
   const [themes, setThemes] = useState<ThemeInfo[]>([]);
+  const [processes, setProcesses] = useState<{ pid: number; name: string; command: string }[]>([]);
   const [symbols, setSymbols] = useState<Awaited<ReturnType<typeof searchSymbols>>>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -49,11 +51,12 @@ export function Palette() {
   useEffect(() => {
     if (mode === "files" && root) api.listFiles(root).then(setFiles).catch(() => setFiles([]));
     if (mode === "themes") listThemes().then(setThemes);
+    if (mode === "processes") api.listProcesses().then(setProcesses);
   }, [mode, root]);
 
   // Typing ">", ":" or "#" switches mode, like VS Code.
   const onChange = (v: string) => {
-    if (mode !== "themes" && mode !== "projects") {
+    if (mode !== "themes" && mode !== "projects" && mode !== "processes") {
       if (v.startsWith(">")) setMode("commands");
       else if (v.startsWith(":")) setMode("line");
       else if (v.startsWith("#")) setMode("symbols");
@@ -125,6 +128,16 @@ export function Palette() {
       }));
     }
 
+    if (mode === "processes") {
+      return fuzzyFilter(processes, query, (p) => `${p.name} ${p.pid} ${p.command}`, 80).map(({ item: p }) => ({
+        key: String(p.pid),
+        label: `${p.name}`,
+        detail: `${p.pid}  ${p.command}`,
+        icon: { icon: "codicon-server-process" },
+        run: () => attachToProcess(p.pid, p.name),
+      }));
+    }
+
     if (mode === "projects") {
       const { projects, startup } = useSolution.getState();
       const runnable = projects.filter((p) => p.isRunnable);
@@ -182,7 +195,7 @@ export function Palette() {
         run: () => useStore.getState().openFile(item, line ? { line: +line, column: col ? +col : 1 } : undefined),
       };
     });
-  }, [mode, query, files, themes, root, symbols]);
+  }, [mode, query, files, themes, root, symbols, processes]);
 
   // Live preview while moving through themes.
   useEffect(() => {
@@ -214,7 +227,9 @@ export function Palette() {
           placeholder={
             mode === "themes"
               ? "Select Color Theme (Up/Down keys to preview)"
-              : mode === "projects"
+              : mode === "processes"
+                ? "Attach to process (type a name or process id)"
+                : mode === "projects"
                 ? "Select startup project"
                 : mode === "files"
                   ? "Search files by name (:line to go to a line, > for commands, # for symbols)"

@@ -5,6 +5,7 @@ import { useOutput, type Channel } from "../lib/output";
 import { allProblems, useProblems, type Problem } from "../lib/problems";
 import { useStore, type PanelTab } from "../store";
 import { TerminalPanel } from "./TerminalPanel";
+import { DebugConsole } from "./DebugView";
 
 export function BottomPanel() {
   const tab = useStore((s) => s.panelTab);
@@ -19,6 +20,7 @@ export function BottomPanel() {
         [
           ["problems", "Problems", errors + warnings || null],
           ["output", "Output", null],
+          ["debug", "Debug Console", null],
           ["terminal", "Terminal", null],
         ] as [PanelTab, string, number | null][]
       ).map(([id, label, count]) => (
@@ -34,6 +36,7 @@ export function BottomPanel() {
     <>
       {tab === "problems" && <ProblemsPanel tabs={tabs} problems={problems} />}
       {tab === "output" && <OutputPanel tabs={tabs} />}
+      {tab === "debug" && <DebugConsole tabs={tabs} />}
       <TerminalPanel tabs={tabs} visible={tab === "terminal"} />
     </>
   );

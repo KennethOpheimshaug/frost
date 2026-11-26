@@ -19,6 +19,12 @@ import { allProblems, useProblems } from "./lib/problems";
 import { buildTarget, loadSolution, setStartup, useSolution } from "./dotnet/solution";
 import { cancelBuild, runBuild, useBuild } from "./dotnet/build";
 import { runProject, stopRun, useRun } from "./dotnet/run";
+import { DebugToolbar, DebugView } from "./components/DebugView";
+import { Overlays } from "./components/Overlays";
+import { loadBreakpoints, toggleBreakpoint } from "./dap/breakpoints";
+import {
+  continueRun, installDebugger, isDebugging, pause, restartDebugging, startDebugging, stepInto, stepOut, stepOver, stopDebugging, useDebug,
+} from "./dap/session";
 import { notifyFileChanges, notifySaved, startCsharp, stopCsharp, useCsharp } from "./lsp/roslyn";
 import { Palette } from "./components/Palette";
 import "./App.css";
@@ -100,6 +106,7 @@ export default function App() {
   const csharpCmd = s.settings["dotnet.languageServer.command"];
   useEffect(() => {
     loadSolution(s.root);
+    loadBreakpoints(s.root);
     if (!s.root || !csharpOn) {
       stopCsharp();
       return;
@@ -303,7 +310,39 @@ export default function App() {
       { id: "build.cancel", label: "Build: Cancel Build", keybinding: "Ctrl+Pause", run: () => cancelBuild() },
       { id: "run.run", label: "Run: Run Startup Project", keybinding: "Ctrl+F5", keys: ["Shift+F10"], run: () => runStartup() },
       { id: "run.watch", label: "Run: Run with Hot Reload (dotnet watch)", keybinding: "Ctrl+Alt+F5", run: () => runProject("watch") },
-      { id: "run.stop", label: "Run: Stop", keybinding: "Shift+F5", keys: ["Ctrl+F2"], run: () => stopRun() },
+      { id: "run.stop", label: "Run: Stop", keybinding: "Shift+F5", keys: ["Ctrl+F2"], run: () => (isDebugging() ? stopDebugging() : stopRun()) },
+      {
+        id: "debug.start",
+        label: "Debug: Start Debugging / Continue",
+        keybinding: "F5",
+        keys: ["Shift+F9"],
+        run: () => {
+          const status = useDebug.getState().status;
+          if (status === "stopped") continueRun();
+          else if (status === "inactive") startDebugging();
+        },
+      },
+      { id: "debug.restart", label: "Debug: Restart", keybinding: "Ctrl+Shift+F5", run: () => restartDebugging() },
+      { id: "debug.pause", label: "Debug: Pause", keybinding: "F6", run: () => pause() },
+      { id: "debug.stepOver", label: "Debug: Step Over", keybinding: "F10", keys: ["F8"], run: () => stepOver() },
+      { id: "debug.stepInto", label: "Debug: Step Into", keybinding: "F11", keys: ["F7"], run: () => stepInto() },
+      { id: "debug.stepOut", label: "Debug: Step Out", keybinding: "Shift+F11", keys: ["Shift+F8"], run: () => stepOut() },
+      {
+        id: "debug.toggleBreakpoint",
+        label: "Debug: Toggle Breakpoint",
+        keybinding: "F9",
+        keys: ["Ctrl+F8"],
+        run: () => {
+          const ed = activeEditor();
+          const model = ed?.getModel();
+          const pos = ed?.getPosition();
+          if (model && pos) toggleBreakpoint(model.uri.fsPath, pos.lineNumber);
+        },
+      },
+      { id: "debug.attach", label: "Debug: Attach to Process…", keybinding: "Ctrl+Alt+P", run: () => st().openPalette("processes") },
+      { id: "debug.install", label: "Debug: Download netcoredbg (debugger)", run: () => installDebugger() },
+      { id: "view.debug", label: "View: Show Run and Debug", keybinding: "Ctrl+Shift+D", run: () => useStore.setState({ sidebar: "debug" }) },
+      { id: "view.debugConsole", label: "View: Show Debug Console", keybinding: "Ctrl+Shift+Y", run: () => st().showPanel("debug") },
       { id: "run.selectStartup", label: "Run: Select Startup Project…", run: () => st().openPalette("projects") },
       { id: "view.solution", label: "View: Show Solution", keybinding: "Ctrl+Alt+L", run: () => useStore.setState({ sidebar: "solution" }) },
       { id: "view.problems", label: "View: Show Problems", keybinding: "Ctrl+Shift+M", run: () => st().showPanel("problems") },
@@ -324,7 +363,7 @@ export default function App() {
       const key = e.key === "F1" ? "Ctrl+Shift+P" : keyString(e);
       if (!key) return;
       // Block WebView shortcuts that don't make sense in an IDE.
-      if (["F5", "Ctrl+R", "Ctrl+Shift+R", "Ctrl+J"].includes(key)) {
+      if (["Ctrl+R", "Ctrl+Shift+R", "Ctrl+J"].includes(key) && !commandForKey(key)) {
         e.preventDefault();
         return;
       }
@@ -373,13 +412,14 @@ export default function App() {
         {s.sidebar && (
           <>
             <aside className="sidebar" style={{ width: layout.sidebar }}>
-              {s.sidebar === "explorer" ? <Explorer onOpenFolder={() => openFolder()} /> : s.sidebar === "solution" ? <SolutionView /> : <SearchView />}
+              {s.sidebar === "explorer" ? <Explorer onOpenFolder={() => openFolder()} /> : s.sidebar === "solution" ? <SolutionView /> : s.sidebar === "debug" ? <DebugView /> : <SearchView />}
             </aside>
             <div className="sash vertical" onPointerDown={drag("sidebar")} />
           </>
         )}
         <div className="center">
           <div className="editor-area">
+            <DebugToolbar />
             {s.groups.map((g, i) => (
               <EditorGroup key={g.id} group={g} index={i} focused={i === s.activeGroup} />
             ))}
@@ -392,6 +432,7 @@ export default function App() {
       </div>
       <StatusBar file={current} />
       {s.palette && <Palette />}
+      <Overlays />
       <div className="toasts">
         {s.toasts.map((t) => (
           <div key={t.id} className={`toast ${t.kind}`} onClick={() => s.dismissToast(t.id)}>
@@ -445,7 +486,7 @@ function TitleBar({ onOpenFolder }: { onOpenFolder: () => void }) {
 function ActivityBar() {
   const sidebar = useStore((s) => s.sidebar);
   const panelOpen = useStore((s) => s.panelOpen);
-  const item = (view: "explorer" | "solution" | "search", icon: string, title: string) => (
+  const item = (view: "explorer" | "solution" | "search" | "debug", icon: string, title: string) => (
     <button className={`activity-item ${sidebar === view ? "active" : ""}`} title={title} onClick={() => useStore.getState().toggleSidebar(view)}>
       <span className={`codicon ${icon}`} />
     </button>
@@ -455,6 +496,7 @@ function ActivityBar() {
       {item("explorer", "codicon-files", "Explorer (Ctrl+Shift+E)")}
       {item("solution", "codicon-symbol-namespace", "Solution (Ctrl+Alt+L)")}
       {item("search", "codicon-search", "Search (Ctrl+Shift+F)")}
+      {item("debug", "codicon-debug-alt", "Run and Debug (Ctrl+Shift+D)")}
       <button className={`activity-item ${panelOpen ? "active-soft" : ""}`} title="Terminal (Ctrl+`)" onClick={() => useStore.getState().togglePanel()}>
         <span className="codicon codicon-terminal" />
       </button>
@@ -510,6 +552,7 @@ function RunControls() {
   const { projects, startup } = useSolution();
   const running = useRun();
   const building = useBuild((b) => b.running);
+  const debugStatus = useDebug((d) => d.status);
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const runnable = projects.filter((p) => p.isRunnable);
   const current = projects.find((p) => p.path === startup);
@@ -550,7 +593,7 @@ function RunControls() {
           <span className="codicon codicon-play" />
         </button>
       )}
-      <button className="icon-button debug" disabled title="Debug (coming next in phase 2)">
+      <button className="icon-button debug" title="Debug (F5 / Shift+F9)" disabled={!current || !!building || debugStatus !== "inactive"} onClick={() => startDebugging()}>
         <span className="codicon codicon-debug-alt" />
       </button>
       {menu && <ContextMenu {...menu} onClose={() => setMenu(null)} />}

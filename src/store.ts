@@ -10,9 +10,9 @@ export interface EditorGroup {
   active: string | null;
 }
 
-export type SidebarView = "explorer" | "solution" | "search";
-export type PanelTab = "terminal" | "problems" | "output";
-export type PaletteMode = "commands" | "files" | "line" | "themes" | "symbols" | "projects";
+export type SidebarView = "explorer" | "solution" | "search" | "debug";
+export type PanelTab = "terminal" | "problems" | "output" | "debug";
+export type PaletteMode = "commands" | "files" | "line" | "themes" | "symbols" | "projects" | "processes";
 
 export interface Toast {
   id: number;

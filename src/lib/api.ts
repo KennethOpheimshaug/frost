@@ -78,6 +78,11 @@ export const api = {
   procStart: (id: string, commandName: string, args: string[], cwd?: string, env?: Record<string, string>) =>
     invoke<void>("proc_start", { id, commandName, args, cwd, env }),
   procKill: (id: string) => invoke<void>("proc_kill", { id }),
+  findDebugger: (command?: string) => invoke<string | null>("find_debugger", { command }),
+  installNetcoredbg: () => invoke<string>("install_netcoredbg"),
+  runCapture: (commandName: string, args: string[], cwd?: string) =>
+    invoke<{ code: number | null; stdout: string; stderr: string }>("run_capture", { commandName, args, cwd }),
+  listProcesses: () => invoke<{ pid: number; name: string; command: string }[]>("list_processes"),
   onLspMessage: (cb: (id: string, json: string) => void): Promise<UnlistenFn> =>
     listen<[string, string]>("lsp-message", (e) => cb(e.payload[0], e.payload[1])),
   onProcLine: (cb: (id: string, stream: "stdout" | "stderr", line: string) => void): Promise<UnlistenFn> =>
