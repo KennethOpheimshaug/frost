@@ -140,14 +140,17 @@ export function Palette() {
 
     if (mode === "projects") {
       const { projects, startup } = useSolution.getState();
-      const runnable = projects.filter((p) => p.isRunnable);
-      if (!runnable.length) return [{ key: "none", label: "No runnable projects found.", run: () => {} }];
-      return fuzzyFilter(runnable, query, (p) => p.name).map(({ item: p, result }) => ({
+      if (!projects.length) return [{ key: "none", label: "No .NET projects found in this folder.", run: () => {} }];
+      const sorted = [...projects].sort((a, b) => Number(b.isRunnable) - Number(a.isRunnable) || a.name.localeCompare(b.name));
+      return fuzzyFilter(sorted, query, (p) => p.name).map(({ item: p, result }) => ({
         key: p.path,
         label: p.name,
         positions: result.positions,
-        detail: p.path === startup ? "current startup project" : root ? relative(root, p.path) : p.path,
-        icon: { icon: "codicon-rocket", color: "#3794ff" },
+        detail:
+          (p.path === startup ? "current startup project · " : "") +
+          (p.isRunnable ? "" : p.isTest ? "test project · " : "library? · ") +
+          (root ? relative(root, p.path) : p.path),
+        icon: p.isRunnable ? { icon: "codicon-rocket", color: "#3794ff" } : { icon: "codicon-package", color: "#9b7bd4" },
         run: () => setStartup(p.path),
       }));
     }
@@ -230,7 +233,7 @@ export function Palette() {
               : mode === "processes"
                 ? "Attach to process (type a name or process id)"
                 : mode === "projects"
-                ? "Select startup project"
+                ? "Select the startup project to run"
                 : mode === "files"
                   ? "Search files by name (:line to go to a line, > for commands, # for symbols)"
                   : ""

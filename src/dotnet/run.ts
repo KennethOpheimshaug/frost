@@ -26,7 +26,7 @@ export function runProject(mode: "run" | "watch", projectPath?: string, opts: { 
   ensureListening();
   const project = projectPath ?? useSolution.getState().startup;
   if (!project) {
-    useStore.getState().toast("No runnable project found. Projects need <OutputType>Exe</OutputType> or a Web SDK.", "error");
+    useStore.getState().openPalette("projects");
     return;
   }
   // `dotnet run` builds first; `dotnet watch` hot-reloads supported changes and restarts otherwise.

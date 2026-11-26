@@ -170,7 +170,7 @@ pub fn read_project(path: String) -> Result<ProjectInfo, String> {
         .collect();
     let is_test = IS_TEST.is_match(&text)
         || packages.iter().any(|p| p.name == "Microsoft.NET.Test.Sdk" || p.name.starts_with("xunit.v3") || p.name == "TUnit");
-    let sdk_runs = sdk.as_deref().is_some_and(|s| s.contains(".Web") || s.contains(".Worker") || s.contains("Aspire"));
+    let sdk_runs = sdk.as_deref().is_some_and(|s| s.contains(".Web") || s.contains(".Worker") || s.contains("Aspire") || s.contains("Blazor"));
     let ot = output_type.as_deref().unwrap_or("").to_lowercase();
     let is_runnable = !is_test && (ot == "exe" || ot == "winexe" || (sdk_runs && ot != "library"));
     Ok(ProjectInfo {

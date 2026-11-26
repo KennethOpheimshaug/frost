@@ -21,13 +21,13 @@ export function DebugView() {
       <div className="sidebar-title">Run and Debug</div>
       {status === "inactive" && (
         <div className="debug-start">
-          <button className="primary-button" disabled={!current} onClick={() => startDebugging()}>
-            <span className="codicon codicon-debug-alt" /> Debug {current?.name ?? "…"}
+          <button className="primary-button" disabled={!projects.length} onClick={() => (current ? startDebugging() : useStore.getState().openPalette("projects"))}>
+            <span className="codicon codicon-debug-alt" /> {current ? `Debug ${current.name}` : "Choose a project to debug…"}
           </button>
           <button className="link-button" onClick={() => runCommand("debug.attach")}>
             Attach to Process…
           </button>
-          {!current && <p className="muted">Pick a startup project in the toolbar first.</p>}
+          {!projects.length && <p className="muted">No .NET projects found in this folder.</p>}
         </div>
       )}
       <div className="debug-sections">

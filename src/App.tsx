@@ -558,19 +558,22 @@ function RunControls() {
   const current = projects.find((p) => p.path === startup);
   const run = () => runCommand("run.run");
 
+  const others = projects.filter((p) => !p.isRunnable);
   const openMenu = (e: React.MouseEvent) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const item = (p: (typeof projects)[number]) => ({ label: `${p.path === startup ? "✓ " : "   "}${p.name}`, action: () => setStartup(p.path) });
     setMenu({
       x: r.left,
       y: r.bottom + 4,
-      items: runnable.length
+      items: projects.length
         ? [
-            ...runnable.map((p) => ({ label: `${p.path === startup ? "✓ " : "   "}${p.name}`, action: () => setStartup(p.path) })),
+            ...runnable.map(item),
+            ...(others.length ? [{ separator: true as const }, { label: "Other projects:", action: () => {}, disabled: true }, ...others.map(item)] : []),
             { separator: true as const },
-            { label: "Run with Hot Reload (dotnet watch)", action: () => runProject("watch") },
+            { label: "Run with Hot Reload (dotnet watch)", action: () => runProject("watch"), disabled: !current },
             { label: "Build Solution", hint: "Ctrl+Shift+B", action: () => runCommand("build.build") },
           ]
-        : [{ label: "No runnable projects (needs OutputType Exe or a Web SDK)", action: () => {}, disabled: true }],
+        : [{ label: "No .NET projects found in this folder", action: () => {}, disabled: true }],
     });
   };
 
@@ -578,7 +581,7 @@ function RunControls() {
     <>
       <button className="run-config" onClick={openMenu} title="Select startup project">
         <span className={`codicon ${current ? "codicon-rocket" : "codicon-symbol-event"}`} />
-        <span>{current?.name ?? (projects.length ? "No runnable project" : "No project")}</span>
+        <span>{current?.name ?? (projects.length ? "Choose project…" : "No project")}</span>
         <span className="codicon codicon-chevron-down" />
       </button>
       <button className="icon-button" title={building ? "Cancel Build (Ctrl+Pause)" : "Build Solution (Ctrl+Shift+B)"} disabled={!projects.length} onClick={() => runCommand(building ? "build.cancel" : "build.build")}>
@@ -589,11 +592,21 @@ function RunControls() {
           <span className="codicon codicon-debug-stop" />
         </button>
       ) : (
-        <button className="icon-button run" title="Run (Ctrl+F5 / Shift+F10)" disabled={!current || !!building} onClick={run}>
+        <button
+          className="icon-button run"
+          title={!projects.length ? "No .NET projects found in this folder" : building ? "Wait for the build to finish" : current ? `Run ${current.name} (Ctrl+F5 / Shift+F10)` : "Choose a project to run"}
+          disabled={!projects.length || !!building}
+          onClick={run}
+        >
           <span className="codicon codicon-play" />
         </button>
       )}
-      <button className="icon-button debug" title="Debug (F5 / Shift+F9)" disabled={!current || !!building || debugStatus !== "inactive"} onClick={() => startDebugging()}>
+      <button
+        className="icon-button debug"
+        title={current ? `Debug ${current.name} (F5 / Shift+F9)` : "Choose a project to debug"}
+        disabled={!projects.length || !!building || debugStatus !== "inactive"}
+        onClick={() => (current ? startDebugging() : useStore.getState().openPalette("projects"))}
+      >
         <span className="codicon codicon-debug-alt" />
       </button>
       {menu && <ContextMenu {...menu} onClose={() => setMenu(null)} />}
